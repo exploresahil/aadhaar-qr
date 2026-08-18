@@ -1,0 +1,32 @@
+{
+  "name": "next-js-app",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "dev:https": "next dev --experimental-https",
+    "build": "next build",
+    "start": "next start",
+    "lint": "biome check",
+    "format": "biome format --write"
+  },
+  "dependencies": {
+    "@yudiel/react-qr-scanner": "^2.6.0",
+    "jpeg2000": "~1.1.1",
+    "lenis": "latest",
+    "next": "16.2.0",
+    "qr-scanner": "^1.4.2",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "zod": "latest"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.2.0",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "babel-plugin-react-compiler": "1.0.0",
+    "sass": "latest",
+    "typescript": "^5"
+  }
+}

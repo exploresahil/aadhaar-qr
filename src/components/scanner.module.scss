@@ -1,0 +1,802 @@
+.scannerWrapper {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 680px;
+  margin: 0 auto;
+}
+
+.tabHeader {
+  display: flex;
+  background: #e5e5ea;
+  border-radius: 12px;
+  padding: 4px;
+  gap: 4px;
+  margin-bottom: 1.25rem;
+  width: 100%;
+}
+
+.tabBtn {
+  flex: 1;
+  font-family: var(--font-geist-sans, sans-serif);
+  font-size: clamp(0.725rem, 3.2vw, 0.9rem);
+  font-weight: 500;
+  color: #48484a;
+  background: transparent;
+  border: none;
+  padding: 0.6rem 0.4rem;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: all 0.2s ease;
+
+  &:hover {
+    color: #000000;
+  }
+
+  @media (max-width: 480px) {
+    padding: 0.55rem 0.25rem;
+  }
+}
+
+.activeTab {
+  background: #ffffff;
+  color: #000000;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.tabBody {
+  width: 100%;
+}
+
+.cameraBox {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  gap: 1.25rem;
+}
+
+/* Open Camera Placeholder (Before camera start) */
+.openCameraPlaceholder {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  max-height: 480px;
+  background: #f5f5f7;
+  border: 2px dashed rgba(23, 23, 23, 0.15);
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  box-sizing: border-box;
+
+  @media (max-width: 600px) {
+    max-height: 380px;
+    padding: 1.5rem;
+  }
+}
+
+.openCameraContent {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  max-width: 320px;
+
+  h3 {
+    font-family: var(--font-geist-sans, sans-serif);
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #171717;
+    margin-top: 1rem;
+    margin-bottom: 0.5rem;
+  }
+
+  p {
+    font-family: var(--font-geist-sans, sans-serif);
+    font-size: 0.85rem;
+    color: #4b5563;
+    line-height: 1.4;
+    margin-bottom: 1.5rem;
+  }
+}
+
+.cameraIconCircle {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: rgba(185, 28, 28, 0.08);
+  color: #b91c1c;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.openCameraBtn {
+  font-family: var(--font-geist-sans, sans-serif);
+  font-size: 0.95rem;
+  font-weight: 600;
+  background: #b91c1c;
+  color: #ffffff;
+  border: none;
+  padding: 0.85rem 2rem;
+  border-radius: 999px;
+  cursor: pointer;
+  box-shadow: 0 8px 20px -4px rgba(185, 28, 28, 0.4);
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: #991b1b;
+    transform: translateY(-1px);
+    box-shadow: 0 12px 24px -4px rgba(185, 28, 28, 0.5);
+  }
+}
+
+/* Video Viewport (1:1 Square Mobile Camera Scanner Viewfinder) */
+.videoViewportSquare {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  max-height: 480px;
+  border-radius: 20px;
+  overflow: hidden;
+  background: #000000;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.3);
+
+  @media (max-width: 600px) {
+    max-height: 380px;
+    border-radius: 16px;
+  }
+}
+
+/* Full Square Target Overlay Frame */
+.squareViewfinderOverlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.targetFrame {
+  position: relative;
+  width: 72%;
+  height: 72%;
+  box-shadow: 0 0 0 4000px rgba(0, 0, 0, 0.55);
+  border-radius: 0;
+}
+
+/* Corner Reticle Brackets (Sharp 90-degree corners) */
+.reticleCornerTopLeft,
+.reticleCornerTopRight,
+.reticleCornerBottomLeft,
+.reticleCornerBottomRight {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  border-color: #ef4444;
+  border-style: solid;
+  border-radius: 0;
+}
+
+.reticleCornerTopLeft {
+  top: -2px;
+  left: -2px;
+  border-width: 4px 0 0 4px;
+}
+
+.reticleCornerTopRight {
+  top: -2px;
+  right: -2px;
+  border-width: 4px 4px 0 0;
+}
+
+.reticleCornerBottomLeft {
+  bottom: -2px;
+  left: -2px;
+  border-width: 0 0 4px 4px;
+}
+
+.reticleCornerBottomRight {
+  bottom: -2px;
+  right: -2px;
+  border-width: 0 4px 4px 0;
+}
+
+/* Laser Scanning Line Animation */
+.scanLaser {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(
+    90deg,
+    rgba(239, 68, 68, 0) 0%,
+    #ef4444 50%,
+    rgba(239, 68, 68, 0) 100%
+  );
+  box-shadow: 0 0 15px #ef4444, 0 0 8px #ef4444;
+  animation: laserScan 2.2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes laserScan {
+  0% {
+    top: 5%;
+    opacity: 0.3;
+  }
+  50% {
+    top: 92%;
+    opacity: 1;
+  }
+  100% {
+    top: 5%;
+    opacity: 0.3;
+  }
+}
+
+/* Viewport Error Overlay */
+.viewportErrorOverlay {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  right: 16px;
+  background: rgba(185, 28, 28, 0.92);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: #ffffff;
+  padding: 0.85rem 1rem;
+  border-radius: 12px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  animation: fadeInPop 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.errorIcon {
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+.errorMessageText {
+  font-family: var(--font-geist-sans, sans-serif);
+  font-size: 0.825rem;
+  line-height: 1.35;
+  margin: 0;
+  flex: 1;
+}
+
+.dismissErrorBtn {
+  font-family: var(--font-geist-sans, sans-serif);
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: #ffffff;
+  color: #b91c1c;
+  border: none;
+  padding: 0.4rem 0.75rem;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 0.2s ease;
+
+  &:hover {
+    opacity: 0.9;
+  }
+}
+
+/* Viewport Top Tap to Focus Tip Overlay */
+.tapToFocusTipOverlay {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: rgba(255, 255, 255, 0.9);
+  font-family: var(--font-geist-sans, sans-serif);
+  font-size: 0.675rem;
+  font-weight: 500;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  z-index: 20;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  white-space: nowrap;
+  letter-spacing: 0.2px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+}
+
+/* Tap to Focus Ripple Animation Ring */
+.focusRippleRing {
+  position: absolute;
+  width: 54px;
+  height: 54px;
+  margin-left: -27px;
+  margin-top: -27px;
+  border: 2.5px solid #ef4444;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 40;
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.85);
+  animation: focusPulse 0.75s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+@keyframes focusPulse {
+  0% {
+    transform: scale(1.6);
+    opacity: 1;
+    border-color: #ef4444;
+  }
+  50% {
+    transform: scale(0.9);
+    opacity: 0.95;
+    border-color: #facc15;
+  }
+  100% {
+    transform: scale(1.1);
+    opacity: 0;
+    border-color: #ef4444;
+  }
+}
+
+/* Viewport Yellow Torch Recommendation Tip Overlay (Bottom) */
+.viewportTorchTipOverlay {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(234, 179, 8, 0.78);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(254, 240, 138, 0.6);
+  color: #000000;
+  font-family: var(--font-geist-sans, sans-serif);
+  font-size: 0.725rem;
+  font-weight: 600;
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+  z-index: 25;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  white-space: nowrap;
+  animation: fadeInPop 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform 0.2s ease, background 0.2s ease;
+
+  &:hover {
+    background: rgba(250, 204, 21, 0.9);
+    transform: translateX(-50%) scale(1.04);
+  }
+}
+
+/* Viewport Green Checkmark Success Flash Overlay */
+.viewportSuccessOverlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(22, 163, 74, 0.85);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  color: #ffffff;
+  font-family: var(--font-geist-sans, sans-serif);
+  font-size: 1.25rem;
+  font-weight: 600;
+  animation: fadeInPop 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.successCircle {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: #ffffff;
+  color: #16a34a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  animation: pulseScale 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes fadeInPop {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes pulseScale {
+  0% {
+    transform: scale(0.5);
+  }
+  50% {
+    transform: scale(1.15);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* Camera Controls Bar Grid below Viewport */
+.controlsBarGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  width: 100%;
+  background: #f5f5f7;
+  border: 1px solid rgba(23, 23, 23, 0.1);
+  padding: 1rem;
+  border-radius: 16px;
+  box-sizing: border-box;
+
+  @media (max-width: 600px) {
+    padding: 0.85rem;
+    gap: 0.75rem;
+  }
+}
+
+.cameraSelectWrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+  width: 100%;
+}
+
+.cameraSelectLabel {
+  font-family: var(--font-geist-sans, sans-serif);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #374151;
+  white-space: nowrap;
+}
+
+.cameraSelect {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: var(--font-geist-sans, sans-serif);
+  font-size: 0.825rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid rgba(23, 23, 23, 0.15);
+  background: #ffffff;
+  color: #111827;
+  outline: none;
+}
+
+.zoomControlsWrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+}
+
+.zoomPresetsRow {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.zoomPill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  box-sizing: border-box;
+  font-family: var(--font-geist-mono, monospace);
+  font-size: 0.75rem;
+  padding: 0 0.75rem;
+  background: #e5e5ea;
+  color: #111827;
+  border-radius: 999px;
+  border: 1px solid rgba(23, 23, 23, 0.15);
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: #d1d1d6;
+    color: #000000;
+  }
+}
+
+.zoomActive {
+  background: #111827;
+  color: #ffffff;
+  border-color: #111827;
+  font-weight: 600;
+}
+
+.zoomStepRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.zoomStepBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  font-family: var(--font-geist-sans, sans-serif);
+  font-size: 0.825rem;
+  font-weight: 500;
+  background: #e5e5ea;
+  color: #111827;
+  border-radius: 10px;
+  border: 1px solid rgba(23, 23, 23, 0.15);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: 100%;
+
+  &:hover:not(:disabled) {
+    background: #d1d1d6;
+    color: #000000;
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+}
+
+.actionButtons {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.primaryActionRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.contrastBtn,
+.torchBtn,
+.stopCameraBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 42px;
+  font-family: var(--font-geist-sans, sans-serif);
+  font-size: 0.85rem;
+  font-weight: 600;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.contrastBtn,
+.torchBtn {
+  background: #e5e5ea;
+  color: #111827;
+  border: 1px solid rgba(23, 23, 23, 0.15);
+
+  &:hover {
+    background: #d1d1d6;
+  }
+}
+
+.contrastActive {
+  background: #111827 !important;
+  color: #ffffff;
+  border-color: #111827;
+}
+
+.torchActive {
+  background: #eab308 !important;
+  color: #000000;
+  border-color: #ca8a04;
+  font-weight: 600;
+}
+
+.stopCameraBtn {
+  background: #111827;
+  color: #ffffff;
+  border: 1px solid #111827;
+  width: 100%;
+
+  &:hover {
+    background: #b91c1c;
+    border-color: #b91c1c;
+  }
+}
+
+/* Upload Box & Upload Loading State */
+.uploadBox {
+  width: 100%;
+}
+
+.uploadLoadingBox {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3.5rem 1.5rem;
+  background: #f5f5f7;
+  border-radius: 14px;
+  border: 1.5px solid rgba(23, 23, 23, 0.12);
+  text-align: center;
+  gap: 1rem;
+  animation: fadeInPop 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+
+  h3 {
+    font-family: var(--font-geist-sans, sans-serif);
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #171717;
+  }
+
+  p {
+    font-family: var(--font-geist-sans, sans-serif);
+    font-size: 0.85rem;
+    color: #4b5563;
+    max-width: 360px;
+    line-height: 1.4;
+  }
+}
+
+.uploadSpinnerSvg {
+  will-change: transform;
+  transform: translateZ(0);
+  animation: spinLoader 0.8s linear infinite;
+  -webkit-animation: spinLoader 0.8s linear infinite;
+}
+
+@keyframes spinLoader {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.dropZone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1.5rem;
+  border: 2px dashed rgba(23, 23, 23, 0.15);
+  border-radius: 14px;
+  background: #f5f5f7;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    border-color: #b91c1c;
+    background: rgba(185, 28, 28, 0.02);
+  }
+
+  @media (max-width: 600px) {
+    padding: 2rem 1rem;
+  }
+}
+
+.dropZoneContent {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.75rem;
+
+  h3 {
+    font-family: var(--font-geist-sans, sans-serif);
+    font-size: 1.1rem;
+    font-weight: 500;
+    color: #171717;
+  }
+
+  p {
+    font-family: var(--font-geist-sans, sans-serif);
+    font-size: 0.85rem;
+    color: #4b5563;
+  }
+}
+
+.uploadIcon {
+  color: #b91c1c;
+}
+
+.hiddenInput {
+  display: none;
+}
+
+/* Sample Box */
+.sampleBox {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  width: 100%;
+}
+
+.inputLabel {
+  font-family: var(--font-geist-sans, sans-serif);
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #171717;
+}
+
+.textArea {
+  font-family: var(--font-geist-mono, monospace);
+  font-size: 0.85rem;
+  padding: 1rem;
+  border-radius: 12px;
+  border: 1px solid rgba(23, 23, 23, 0.15);
+  background: #ffffff;
+  color: #171717;
+  resize: vertical;
+  outline: none;
+
+  &:focus {
+    border-color: #b91c1c;
+  }
+}
+
+.submitBtn {
+  font-family: var(--font-geist-sans, sans-serif);
+  font-size: 0.9rem;
+  font-weight: 500;
+  background: #171717;
+  color: #ffffff;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  align-self: flex-start;
+
+  &:hover {
+    background: #b91c1c;
+  }
+}
+
+.errorAlert {
+  margin-top: 1.25rem;
+  padding: 1rem;
+  border-radius: 12px;
+  background: rgba(225, 29, 72, 0.08);
+  border: 1px solid rgba(225, 29, 72, 0.3);
+  color: #9f1239;
+  font-family: var(--font-geist-sans, sans-serif);
+  font-size: 0.875rem;
+}

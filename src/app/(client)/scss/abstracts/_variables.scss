@@ -1,0 +1,48 @@
+@use "./functions" as *;
+
+//*----> variables
+
+//*----> fonts
+$font_default_sans: var(--font-geist-sans);
+$font_default_mono: var(--font-geist-mono);
+
+// add font variables here
+
+//*----> colors
+$color_default_light: #f5f5f5;
+$color_default_dark: #1a1a1a;
+
+// add color variables here
+
+//*----> easing
+$easing_default: cubic-bezier(0.76, 0, 0.24, 1);
+
+// add easing variables here
+
+//*----> full_width
+
+@mixin full_width {
+  width: 100vw;
+  max-width: 100%;
+  // adjust this value to adjust the padding on small screens
+  padding-inline: 4vw;
+
+  @include breakpoint(large) {
+    // adjust this value to adjust the padding on large screens
+    padding-inline: 12vw;
+  }
+
+  @include breakpoint(xxlarge) {
+    // adjust this value to adjust the padding on xlarge screens
+    padding-inline: 20vw;
+  }
+}
+
+//*----> aadhaar scanner tokens
+$color_canvas: #f5f5f7;
+$color_ink: #171717;
+$color_ink_soft: #6e6e73;
+$color_primary: #db2f27;
+$color_accent: #e7c700;
+$color_surface: #ffffff;
+$color_glass: rgba(23, 23, 23, 0.72);

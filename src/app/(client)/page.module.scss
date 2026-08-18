@@ -1,0 +1,143 @@
+.container {
+  position: relative;
+  width: 100%;
+  min-height: 100vh;
+  padding-bottom: 4rem;
+}
+
+.glassOrb {
+  position: absolute;
+  top: -100px;
+  right: -100px;
+  width: 500px;
+  height: 500px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(219, 47, 39, 0.12) 0%,
+    rgba(231, 199, 0, 0.08) 50%,
+    rgba(245, 245, 247, 0) 70%
+  );
+  filter: blur(60px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.hero {
+  position: relative;
+  z-index: 1;
+  margin-bottom: 3rem;
+
+  @media (max-width: 600px) {
+    margin-bottom: 2rem;
+  }
+}
+
+.heroTag {
+  font-family: var(--font-geist-mono, monospace);
+  font-size: 0.8rem;
+  letter-spacing: 2px;
+  color: #db2f27;
+  text-transform: uppercase;
+  margin-bottom: 1rem;
+}
+
+.heroTitle {
+  font-family: var(--font-geist-sans, sans-serif);
+  font-size: clamp(2rem, 8vw, 4.5rem);
+  font-weight: 300;
+  line-height: 1.1;
+  letter-spacing: -1px;
+  color: #171717;
+  max-width: 900px;
+  margin-bottom: 1.25rem;
+}
+
+.heroSubtitle {
+  font-family: var(--font-geist-sans, sans-serif);
+  font-size: clamp(0.95rem, 3.5vw, 1.15rem);
+  line-height: 1.6;
+  color: #6e6e73;
+  max-width: 650px;
+}
+
+.scannerSection {
+  position: relative;
+  z-index: 1;
+  margin-bottom: 4rem;
+
+  @media (max-width: 600px) {
+    margin-bottom: 2.5rem;
+  }
+}
+
+.specSection {
+  position: relative;
+  z-index: 1;
+  background: #ffffff;
+  border-radius: 20px;
+  padding: 3rem;
+  border: 1px solid rgba(23, 23, 23, 0.08);
+  margin-bottom: 4rem;
+
+  @media (max-width: 600px) {
+    padding: 1.5rem;
+    border-radius: 16px;
+    margin-bottom: 2.5rem;
+  }
+}
+
+.specHeader {
+  margin-bottom: 2rem;
+
+  h2 {
+    font-family: var(--font-geist-sans, sans-serif);
+    font-size: 1.75rem;
+    font-weight: 400;
+    color: #171717;
+    letter-spacing: -0.5px;
+  }
+}
+
+.specGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 2rem;
+}
+
+.specCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+
+  h3 {
+    font-family: var(--font-geist-mono, monospace);
+    font-size: 0.9rem;
+    color: #db2f27;
+  }
+
+  p {
+    font-family: var(--font-geist-sans, sans-serif);
+    font-size: 0.95rem;
+    color: #6e6e73;
+    line-height: 1.5;
+  }
+}
+
+.footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 2rem;
+  border-top: 1px solid rgba(23, 23, 23, 0.08);
+  font-family: var(--font-geist-mono, monospace);
+  font-size: 0.8rem;
+  color: #6e6e73;
+  flex-wrap: wrap;
+  gap: 1rem;
+
+  @media (max-width: 600px) {
+    flex-direction: column;
+    text-align: center;
+  }
+}
