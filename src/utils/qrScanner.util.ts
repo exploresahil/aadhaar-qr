@@ -6,6 +6,7 @@ import {
   parseAadhaarQr,
   parseLegacyXmlAadhaar,
 } from "@/lib/aadhaar/parser";
+import { BarcodeDetector } from "barcode-detector";
 import QrScanner from "qr-scanner";
 
 export interface ScanResult {
@@ -124,15 +125,35 @@ export async function processDecodedQrResult(
 }
 
 /**
- * Multi-pass smart image scanner for uploaded Aadhaar document images.
- * Yields main thread between passes to keep UI loading spinner animating smoothly.
+ * Helper to scan an image or canvas source using BarcodeDetector (ZXing Engine)
  */
-export async function scanAadhaarQr(
-  source: ScannableSource,
-): Promise<ScanResult> {
-  const yieldThread = () => new Promise((resolve) => setTimeout(resolve, 50));
+async function scanWithBarcodeDetector(
+  // biome-ignore lint/suspicious/noExplicitAny: BarcodeDetector source type
+  source: any,
+): Promise<ScanResult | null> {
+  try {
+    const detector = new BarcodeDetector({ formats: ["qr_code"] });
+    const results = await detector.detect(source);
+    if (results && results.length > 0 && results[0].rawValue) {
+      const rawText = results[0].rawValue;
+      // biome-ignore lint/suspicious/noExplicitAny: ZXing raw byte property
+      const rawBytes = (results[0] as any).rawBytes
+        ? new Uint8Array((results[0] as any).rawBytes)
+        : undefined;
+      return await processDecodedQrResult(rawText, rawBytes);
+    }
+  } catch {
+    // Return null to allow fallback
+  }
+  return null;
+}
 
-  // Pass 1: Direct Scan
+/**
+ * Helper to scan an image or canvas source using QrScanner (jsQR Engine)
+ */
+async function scanWithQrScanner(
+  source: ScannableSource,
+): Promise<ScanResult | null> {
   try {
     const res = await QrScanner.scanImage(source, {
       returnDetailedScanResult: true,
@@ -143,8 +164,25 @@ export async function scanAadhaarQr(
       : undefined;
     return await processDecodedQrResult(res.data, rawBytes);
   } catch {
-    // Continue to Pass 2 if source is Blob or File
+    return null;
   }
+}
+
+/**
+ * Multi-pass smart image scanner for uploaded Aadhaar document images.
+ * Uses BarcodeDetector (ZXing Engine) and QrScanner (jsQR) for high-density QR decoding.
+ */
+export async function scanAadhaarQr(
+  source: ScannableSource,
+): Promise<ScanResult> {
+  const yieldThread = () => new Promise((resolve) => setTimeout(resolve, 50));
+
+  // Pass 1: Direct Scan via BarcodeDetector (ZXing) & QrScanner
+  const bdDirect = await scanWithBarcodeDetector(source);
+  if (bdDirect) return bdDirect;
+
+  const qsDirect = await scanWithQrScanner(source);
+  if (qsDirect) return qsDirect;
 
   if (
     typeof window === "undefined" ||
@@ -183,52 +221,109 @@ export async function scanAadhaarQr(
   canvas.height = height;
 
   // Pass 2: High Contrast Grayscale Canvas Enhancement
-  ctx.filter = "contrast(220%) brightness(110%) grayscale(100%)";
+  ctx.filter = "contrast(200%) brightness(110%) grayscale(100%)";
   ctx.drawImage(img, 0, 0, width, height);
-  try {
-    const res = await QrScanner.scanImage(canvas, {
-      returnDetailedScanResult: true,
-    });
-    // biome-ignore lint/suspicious/noExplicitAny: QrScanner detailed scan result type
-    const rawBytes = (res as any).bytes
-      ? new Uint8Array((res as any).bytes)
-      : undefined;
-    return await processDecodedQrResult(res.data, rawBytes);
-  } catch {
-    // Continue to Pass 3
+
+  const bdCanvas = await scanWithBarcodeDetector(canvas);
+  if (bdCanvas) return bdCanvas;
+
+  const qsCanvas = await scanWithQrScanner(canvas);
+  if (qsCanvas) return qsCanvas;
+
+  // Pass 3: Pyramidal Multi-Region Cropped & Upscaled Scan (Full e-Aadhaar cards & document scans)
+  const gridRegions: Array<{ x: number; y: number; w: number; h: number }> = [];
+
+  if (width > 200 && height > 200) {
+    for (const yRatio of [0.0, 0.25, 0.5]) {
+      for (const xRatio of [0.0, 0.25, 0.5]) {
+        const x = Math.round(width * xRatio);
+        const y = Math.round(height * yRatio);
+        const w = Math.min(width - x, Math.round(width * 0.55));
+        const h = Math.min(height - y, Math.round(height * 0.55));
+        if (w > 50 && h > 50) {
+          gridRegions.push({ x, y, w, h });
+        }
+      }
+    }
   }
 
-  // Pass 3: Multi-Region Cropped Scan (4 Quadrants + Center 60% for full e-Aadhaar documents)
-  const regions = [
-    { x: 0, y: 0, w: width * 0.6, h: height * 0.6 }, // Top-Left
-    { x: width * 0.4, y: 0, w: width * 0.6, h: height * 0.6 }, // Top-Right
-    { x: 0, y: height * 0.4, w: width * 0.6, h: height * 0.6 }, // Bottom-Left
-    { x: width * 0.4, y: height * 0.4, w: width * 0.6, h: height * 0.6 }, // Bottom-Right (standard e-Aadhaar QR location)
-    { x: width * 0.2, y: height * 0.2, w: width * 0.6, h: height * 0.6 }, // Center 60%
-  ];
+  for (const r of gridRegions) {
+    for (const scale of [2.0, 3.0, 4.0]) {
+      await yieldThread();
+      const padding = 30;
 
-  for (const r of regions) {
-    await yieldThread();
-    const cropCanvas = document.createElement("canvas");
-    cropCanvas.width = r.w;
-    cropCanvas.height = r.h;
-    const cropCtx = cropCanvas.getContext("2d");
-    if (!cropCtx) continue;
+      const cropCanvas = document.createElement("canvas");
+      cropCanvas.width = Math.round(r.w * scale + padding * 2);
+      cropCanvas.height = Math.round(r.h * scale + padding * 2);
 
-    cropCtx.filter = "contrast(200%) brightness(110%)";
-    cropCtx.drawImage(img, r.x, r.y, r.w, r.h, 0, 0, r.w, r.h);
+      const cropCtx = cropCanvas.getContext("2d");
+      if (!cropCtx) continue;
 
+      // Preserve crisp module edges during upscaling
+      cropCtx.imageSmoothingEnabled = false;
+
+      // Fill white background for Quiet Zone padding
+      cropCtx.fillStyle = "#ffffff";
+      cropCtx.fillRect(0, 0, cropCanvas.width, cropCanvas.height);
+
+      cropCtx.filter = "contrast(180%) brightness(110%)";
+      cropCtx.drawImage(
+        img,
+        r.x,
+        r.y,
+        r.w,
+        r.h,
+        padding,
+        padding,
+        r.w * scale,
+        r.h * scale,
+      );
+
+      const bdCrop = await scanWithBarcodeDetector(cropCanvas);
+      if (bdCrop) return bdCrop;
+
+      const qsCrop = await scanWithQrScanner(cropCanvas);
+      if (qsCrop) return qsCrop;
+    }
+  }
+
+  // Pass 4: Automatic Server-Side Python Backend Fallback Pass (/api/decode-qr)
+  if (
+    typeof window !== "undefined" &&
+    typeof source === "object" &&
+    source !== null &&
+    "size" in source
+  ) {
     try {
-      const res = await QrScanner.scanImage(cropCanvas, {
-        returnDetailedScanResult: true,
+      const formData = new FormData();
+      formData.append("file", source as Blob);
+
+      const pyResponse = await fetch("/api/decode-qr", {
+        method: "POST",
+        body: formData,
       });
-      // biome-ignore lint/suspicious/noExplicitAny: QrScanner detailed scan result type
-      const rawBytes = (res as any).bytes
-        ? new Uint8Array((res as any).bytes)
-        : undefined;
-      return await processDecodedQrResult(res.data, rawBytes);
+
+      if (pyResponse.ok) {
+        const pyJson = await pyResponse.json();
+        if (pyJson.success && pyJson.raw_text) {
+          const rawBytes = pyJson.raw_text
+            ? new TextEncoder().encode(pyJson.raw_text)
+            : undefined;
+          const scanRes = await processDecodedQrResult(
+            pyJson.raw_text,
+            rawBytes,
+          );
+          if (pyJson.photoBase64 && scanRes.parsed) {
+            scanRes.parsed.photo = Uint8Array.from(
+              atob(pyJson.photoBase64),
+              (c) => c.charCodeAt(0),
+            );
+          }
+          return scanRes;
+        }
+      }
     } catch {
-      // Try next quadrant
+      // Fallback ignored, proceeding to final error message
     }
   }
 

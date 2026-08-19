@@ -266,6 +266,77 @@ function SampleTab({
   );
 }
 
+/* Sub-component: Python OpenCV QR Inspector Tab */
+function PythonTab({
+  isProcessing,
+  onPythonUpload,
+}: {
+  readonly isProcessing: boolean;
+  readonly onPythonUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
+}) {
+  if (isProcessing) {
+    return (
+      <div className={styles.uploadLoadingBox}>
+        <svg
+          className={styles.uploadSpinnerSvg}
+          viewBox="0 0 50 50"
+          width="48"
+          height="48"
+          role="img"
+          aria-label="Loading spinner"
+        >
+          <title>Loading spinner</title>
+          <circle
+            cx="25"
+            cy="25"
+            r="20"
+            fill="none"
+            stroke="rgba(185, 28, 28, 0.2)"
+            strokeWidth="4"
+          />
+          <circle
+            cx="25"
+            cy="25"
+            r="20"
+            fill="none"
+            stroke="#b91c1c"
+            strokeWidth="4"
+            strokeDasharray="80 50"
+            strokeLinecap="round"
+          />
+        </svg>
+        <h3>Processing via Python OpenCV Engine...</h3>
+        <p>
+          Running multi-pass adaptive thresholding & scale grid detection in
+          Python backend
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className={styles.uploadBox}>
+      <label htmlFor="python-qr-file-input" className={styles.dropZone}>
+        <div className={styles.dropZoneContent}>
+          <span style={{ fontSize: "2.5rem" }}>🐍</span>
+          <h3>Upload Image for Python OpenCV QR Inspector</h3>
+          <p>
+            Uses server-side Python OpenCV multi-pass grid engine to detect and
+            decode challenging Aadhaar QRs
+          </p>
+        </div>
+        <input
+          id="python-qr-file-input"
+          type="file"
+          accept="image/*"
+          className={styles.hiddenInput}
+          onChange={onPythonUpload}
+        />
+      </label>
+    </div>
+  );
+}
+
 /* Sub-component: Camera Selector & Zoom Controls Grid */
 function CameraControls({
   videoDevices,
@@ -385,9 +456,9 @@ function CameraControls({
 }
 
 export default function Scanner({ onScanSuccess }: ScannerProps) {
-  const [activeTab, setActiveTab] = useState<"camera" | "upload" | "sample">(
-    "camera",
-  );
+  const [activeTab, setActiveTab] = useState<
+    "camera" | "upload" | "sample" | "python"
+  >("camera");
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
@@ -445,27 +516,39 @@ export default function Scanner({ onScanSuccess }: ScannerProps) {
       const videoInputs = devices.filter((d) => d.kind === "videoinput");
       setVideoDevices(videoInputs);
 
-      const prefs = loadStoredPreferences();
-      const hasSavedDevice =
-        prefs.deviceId &&
-        videoInputs.some((d) => d.deviceId === prefs.deviceId);
-
-      if (hasSavedDevice && prefs.deviceId) {
-        setSelectedDeviceId(prefs.deviceId);
-      } else if (videoInputs.length > 0 && !selectedDeviceId) {
-        const bestId = selectMainBackCamera(videoInputs);
-        if (bestId) setSelectedDeviceId(bestId);
+      if (videoInputs.length > 0) {
+        setSelectedDeviceId((prevId) => {
+          if (prevId && videoInputs.some((d) => d.deviceId === prevId)) {
+            return prevId;
+          }
+          const prefs = loadStoredPreferences();
+          if (
+            prefs.deviceId &&
+            videoInputs.some((d) => d.deviceId === prefs.deviceId)
+          ) {
+            return prefs.deviceId;
+          }
+          return selectMainBackCamera(videoInputs);
+        });
       }
     } catch {
       // Fallback
     }
-  }, [selectedDeviceId]);
+  }, []);
 
   useEffect(() => {
     if (isCameraActive) {
       enumerateCameras();
     }
   }, [isCameraActive, enumerateCameras]);
+
+  const handleSelectDevice = useCallback(
+    (deviceId: string | null) => {
+      setSelectedDeviceId(deviceId);
+      saveStoredPreferences(deviceId, zoomLevel, autoEnhance, isTorchOn);
+    },
+    [zoomLevel, autoEnhance, isTorchOn],
+  );
 
   const startCamera = () => {
     setScanError(null);
@@ -639,6 +722,58 @@ export default function Scanner({ onScanSuccess }: ScannerProps) {
     }
   };
 
+  // Handle Python Backend Image Decoding
+  const handlePythonUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setScanError(null);
+    setIsUploading(true);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch("/api/decode-qr", {
+        method: "POST",
+        body: formData,
+      });
+
+      const json = await response.json();
+      if (!json.success || !json.parsed) {
+        setScanError(
+          json.error ||
+            "Python QR Decoder: Could not detect or decode QR code pattern in uploaded image.",
+        );
+        return;
+      }
+
+      playBeepSound();
+
+      const photoBytes = json.photoBase64
+        ? Uint8Array.from(atob(json.photoBase64), (c) => c.charCodeAt(0))
+        : new Uint8Array(0);
+
+      const scanRes: ScanResult = {
+        rawText: json.raw_text,
+        bytes: new TextEncoder().encode(json.raw_text),
+        parsed: {
+          ...json.parsed,
+          photo: photoBytes,
+          signatureHex: json.signatureHex,
+        },
+      };
+
+      updateResult(scanRes);
+      onScanSuccess?.(scanRes);
+    } catch (err) {
+      setScanError(
+        err instanceof Error ? err.message : "Python QR processing failed",
+      );
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   // Reset Scanner when user clicks "Scan Another"
   const handleReset = () => {
     updateResult(null);
@@ -685,6 +820,13 @@ export default function Scanner({ onScanSuccess }: ScannerProps) {
         >
           ⚡ Payload Test
         </button>
+        <button
+          type="button"
+          className={`${styles.tabBtn} ${activeTab === "python" ? styles.activeTab : ""}`}
+          onClick={() => setActiveTab("python")}
+        >
+          🐍 Python Inspector
+        </button>
       </div>
 
       {/* Tab Contents */}
@@ -701,6 +843,7 @@ export default function Scanner({ onScanSuccess }: ScannerProps) {
                 aria-label="Camera viewport - tap anywhere to focus"
               >
                 <ReactQrScanner
+                  key={selectedDeviceId || "default-camera"}
                   onScan={handleScan}
                   onError={(err) => {
                     if (err instanceof Error) setScanError(err.message);
@@ -712,13 +855,13 @@ export default function Scanner({ onScanSuccess }: ScannerProps) {
                     selectedDeviceId
                       ? {
                           deviceId: { exact: selectedDeviceId },
-                          width: { ideal: 1920, min: 1280 },
-                          height: { ideal: 1080, min: 720 },
+                          width: { ideal: 1920 },
+                          height: { ideal: 1080 },
                         }
                       : {
                           facingMode: { ideal: "environment" },
-                          width: { ideal: 1920, min: 1280 },
-                          height: { ideal: 1080, min: 720 },
+                          width: { ideal: 1920 },
+                          height: { ideal: 1080 },
                         }
                   }
                   styles={{
@@ -830,7 +973,7 @@ export default function Scanner({ onScanSuccess }: ScannerProps) {
               <CameraControls
                 videoDevices={videoDevices}
                 selectedDeviceId={selectedDeviceId}
-                onSelectDevice={setSelectedDeviceId}
+                onSelectDevice={handleSelectDevice}
                 zoomLevel={zoomLevel}
                 onZoomChange={setZoomLevel}
                 autoEnhance={autoEnhance}
@@ -855,6 +998,13 @@ export default function Scanner({ onScanSuccess }: ScannerProps) {
             value={rawPayloadInput}
             onChange={setRawPayloadInput}
             onSubmit={handleSampleSubmit}
+          />
+        )}
+
+        {activeTab === "python" && (
+          <PythonTab
+            isProcessing={isUploading}
+            onPythonUpload={handlePythonUpload}
           />
         )}
 

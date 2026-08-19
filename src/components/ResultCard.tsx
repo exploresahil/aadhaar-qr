@@ -1,8 +1,8 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import type { ParsedAadhaar } from "@/lib/aadhaar/parser";
 import { decodeJp2kToDataUrl } from "@/utils/jp2k.util";
-import { useMemo, useState } from "react";
 import styles from "./resultCard.module.scss";
 
 interface ResultCardProps {
@@ -60,6 +60,7 @@ export default function ResultCard({
   const [copiedJson, setCopiedJson] = useState(false);
   const [copiedPayload, setCopiedPayload] = useState(false);
   const [copiedText, setCopiedText] = useState(false);
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
 
   // Masked Aadhaar number format (First 4 digits of referenceId = last 4 digits of Aadhaar number: XXXX-XXXX-1234)
   const maskedAadhaar = useMemo(() => {
@@ -75,18 +76,16 @@ export default function ResultCard({
 
   // Full IST timestamp of when QR was scanned
   const scanTimestampIst = useMemo(() => {
-    return (
-      new Date().toLocaleString("en-IN", {
-        timeZone: "Asia/Kolkata",
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-        hour12: true,
-      }) + " IST"
-    );
+    return `${new Date().toLocaleString("en-IN", {
+      timeZone: "Asia/Kolkata",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: true,
+    })} IST`;
   }, []);
 
   const photoUrl = useMemo(() => {
@@ -136,12 +135,14 @@ export default function ResultCard({
     try {
       const serializableData = {
         createdAt: scanTimestampIst,
+        version: data.version || "V2/V3",
         maskedAadhaar,
         referenceId: data.referenceId,
         name: data.name,
         dob: data.dob,
         age: ageDisplay || "—",
         gender: data.gender,
+        mobile: data.mobile,
         careOf: data.careOf,
         house: data.house,
         street: data.street,
@@ -184,11 +185,13 @@ export default function ResultCard({
     try {
       const plainText = [
         `Name: ${data.name || "N/A"}`,
+        `Format Version: ${data.version || "V2/V3"}`,
         `Aadhaar No: ${maskedAadhaar}`,
         `Reference ID: ${data.referenceId || "N/A"}`,
         `DOB: ${data.dob || "N/A"}`,
         `Age: ${ageDisplay || "N/A"}`,
         `Gender: ${data.gender || "N/A"}`,
+        ...(data.mobile ? [`Mobile: ${data.mobile}`] : []),
         `PIN Code: ${data.pincode || "N/A"}`,
         `Address: ${fullAddress || "N/A"}`,
         `Verification: ${data.isVerified !== false ? "Verified Secure QR" : "Unverified QR"}`,
@@ -229,8 +232,8 @@ export default function ResultCard({
             className={`${styles.badge} ${data.isVerified === false ? styles.badgeUnverified : ""}`}
           >
             {data.isVerified === false
-              ? "⚠️ UNVERIFIED AADHAAR QR"
-              : "✓ VERIFIED SECURE QR"}
+              ? `⚠️ UNVERIFIED AADHAAR QR (${data.version || "XML"})`
+              : `✓ VERIFIED SECURE QR (${data.version || "V2/V3"})`}
           </span>
           <h2 className={styles.name}>{data.name || "Aadhaar Holder"}</h2>
           <p className={styles.refId}>Aadhaar: {maskedAadhaar}</p>
@@ -299,6 +302,13 @@ export default function ResultCard({
             <span className={styles.valueHighlight}>{maskedAadhaar}</span>
           </div>
 
+          {data.mobile && (
+            <div className={styles.infoRow}>
+              <span className={styles.label}>Mobile Number</span>
+              <span className={styles.valueHighlight}>{data.mobile}</span>
+            </div>
+          )}
+
           <div className={styles.infoRow}>
             <span className={styles.label}>Date of Birth</span>
             <span className={styles.value}>{data.dob || "—"}</span>
@@ -347,6 +357,207 @@ export default function ResultCard({
             </div>
           )}
         </div>
+      </div>
+
+      {/* Diagnostics Accordion */}
+      <div className={styles.diagnosticsSection}>
+        <button
+          type="button"
+          className={styles.diagnosticsToggleBtn}
+          onClick={() => setShowDiagnostics((prev) => !prev)}
+        >
+          <span>
+            🔬 Raw Payload & Technical Diagnostics ({data.version || "V2/V3"})
+          </span>
+          <span>{showDiagnostics ? "▲ Hide" : "▼ Inspect Raw Payload"}</span>
+        </button>
+
+        {showDiagnostics && (
+          <div className={styles.diagnosticsContent}>
+            {rawText && (
+              <div>
+                <div className={styles.rawTextHeader}>
+                  <label htmlFor="diagnostics-raw-payload">
+                    Raw QR Payload Text ({rawText.length} Chars):
+                  </label>
+                </div>
+                <textarea
+                  id="diagnostics-raw-payload"
+                  readOnly
+                  rows={4}
+                  value={rawText}
+                  className={styles.rawTextarea}
+                />
+              </div>
+            )}
+
+            <div className={styles.fieldsTableWrapper}>
+              <table className={styles.fieldsTable}>
+                <thead>
+                  <tr>
+                    <th>Field</th>
+                    <th>Property Name</th>
+                    <th>Parsed Value</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>
+                      <code>Header / Version</code>
+                    </td>
+                    <td>version</td>
+                    <td>
+                      <strong>{data.version || "V2/V3"}</strong>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <code>Bit Indicator</code>
+                    </td>
+                    <td>bitIndicator</td>
+                    <td>{data.bitIndicator}</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <code>Reference ID</code>
+                    </td>
+                    <td>referenceId</td>
+                    <td>
+                      <code>{data.referenceId || "—"}</code>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <code>Name</code>
+                    </td>
+                    <td>name</td>
+                    <td>{data.name || "—"}</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <code>DOB</code>
+                    </td>
+                    <td>dob</td>
+                    <td>{data.dob || "—"}</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <code>Gender</code>
+                    </td>
+                    <td>gender</td>
+                    <td>{data.gender || "—"}</td>
+                  </tr>
+                  {data.mobile && (
+                    <tr>
+                      <td>
+                        <code>Mobile</code>
+                      </td>
+                      <td>mobile</td>
+                      <td>
+                        <strong>{data.mobile}</strong>
+                      </td>
+                    </tr>
+                  )}
+                  <tr>
+                    <td>
+                      <code>Care Of</code>
+                    </td>
+                    <td>careOf</td>
+                    <td>{data.careOf || "—"}</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <code>District</code>
+                    </td>
+                    <td>district</td>
+                    <td>{data.district || "—"}</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <code>Landmark</code>
+                    </td>
+                    <td>landmark</td>
+                    <td>{data.landmark || "—"}</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <code>House</code>
+                    </td>
+                    <td>house</td>
+                    <td>{data.house || "—"}</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <code>Location</code>
+                    </td>
+                    <td>location</td>
+                    <td>{data.location || "—"}</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <code>PIN Code</code>
+                    </td>
+                    <td>pincode</td>
+                    <td>{data.pincode || "—"}</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <code>Post Office</code>
+                    </td>
+                    <td>postOffice</td>
+                    <td>{data.postOffice || "—"}</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <code>State</code>
+                    </td>
+                    <td>state</td>
+                    <td>{data.state || "—"}</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <code>Street</code>
+                    </td>
+                    <td>street</td>
+                    <td>{data.street || "—"}</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <code>Sub District</code>
+                    </td>
+                    <td>subDistrict</td>
+                    <td>{data.subDistrict || "—"}</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <code>VTC</code>
+                    </td>
+                    <td>vtc</td>
+                    <td>{data.vtc || "—"}</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <code>JP2000 Photo</code>
+                    </td>
+                    <td>photo</td>
+                    <td>{data.photo?.length || 0} bytes binary stream</td>
+                  </tr>
+                  {data.signatureHex && (
+                    <tr>
+                      <td>
+                        <code>RSA Signature</code>
+                      </td>
+                      <td>signatureHex</td>
+                      <td>
+                        <code>{data.signatureHex.slice(0, 40)}...</code>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
