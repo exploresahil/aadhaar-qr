@@ -39,10 +39,13 @@ function playBeepSound() {
  * Selects the optimal main back camera lens (bypassing ultra-wide 0.5x blurry macro lenses)
  */
 function selectMainBackCamera(videoInputs: MediaDeviceInfo[]): string | null {
-  if (videoInputs.length === 0) return null;
+  const validInputs = videoInputs.filter(
+    (d) => d.deviceId && d.deviceId.trim() !== "",
+  );
+  if (validInputs.length === 0) return null;
 
   const mainBackCam =
-    videoInputs.find((d) => {
+    validInputs.find((d) => {
       const lbl = d.label.toLowerCase();
       return (
         (lbl.includes("back") ||
@@ -54,7 +57,7 @@ function selectMainBackCamera(videoInputs: MediaDeviceInfo[]): string | null {
         !lbl.includes("wide-angle")
       );
     }) ||
-    videoInputs.find((d) => {
+    validInputs.find((d) => {
       const lbl = d.label.toLowerCase();
       return (
         lbl.includes("back") ||
@@ -64,9 +67,9 @@ function selectMainBackCamera(videoInputs: MediaDeviceInfo[]): string | null {
         lbl.includes("camera2 0")
       );
     }) ||
-    videoInputs[0];
+    validInputs[0];
 
-  return mainBackCam?.deviceId || null;
+  return mainBackCam?.deviceId?.trim() || null;
 }
 
 /**
@@ -471,6 +474,101 @@ function CameraControls({
   );
 }
 
+/* Sub-component: Premium Apple-Grade Error Alert Card */
+function ErrorAlertCard({
+  message,
+  onDismiss,
+  isOverlay = false,
+}: {
+  readonly message: string;
+  readonly onDismiss: () => void;
+  readonly isOverlay?: boolean;
+}) {
+  const isAyushman =
+    message.includes("Ayushman") ||
+    message.toLowerCase().includes("ayushman") ||
+    message.includes("hidn");
+
+  return (
+    <div
+      className={`${styles.errorCardContainer} ${
+        isOverlay ? styles.errorCardOverlay : styles.errorCardInline
+      }`}
+    >
+      <div className={styles.errorCardHeader}>
+        <div className={styles.errorIconBadge}>
+          <svg
+            width="22"
+            height="22"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            role="img"
+            aria-label="Alert icon"
+          >
+            <title>Alert icon</title>
+            <path d="M12 9v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+        <div className={styles.errorCardTextContent}>
+          <h4 className={styles.errorCardTitle}>Invalid QR Code Detected</h4>
+          <p className={styles.errorCardBody}>{message}</p>
+        </div>
+        <button
+          type="button"
+          className={styles.errorCardCloseBtn}
+          onClick={(e) => {
+            e.stopPropagation();
+            onDismiss();
+          }}
+          aria-label="Dismiss error"
+        >
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            role="img"
+            aria-label="Close icon"
+          >
+            <title>Close icon</title>
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      </div>
+
+      <div className={styles.errorCardFooter}>
+        <div className={styles.errorCardTipPill}>
+          <span className={styles.tipIcon}>💡</span>
+          <span>
+            {isAyushman
+              ? "Ayushman Bharat / ABHA health QR codes are not valid Aadhaar cards."
+              : "Only UIDAI Aadhaar QR codes (binary Secure QR or legacy XML) are supported."}
+          </span>
+        </div>
+        <button
+          type="button"
+          className={styles.errorCardRetryBtn}
+          onClick={(e) => {
+            e.stopPropagation();
+            onDismiss();
+          }}
+        >
+          Try Again
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function Scanner({ onScanSuccess }: ScannerProps) {
   const [activeTab, setActiveTab] = useState<
     "camera" | "upload" | "sample" | "python"
@@ -478,8 +576,61 @@ export default function Scanner({ onScanSuccess }: ScannerProps) {
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
+  const [scannerKey, setScannerKey] = useState<number>(0);
+  const [isResetting, setIsResetting] = useState<boolean>(false);
+  const [isStartingCamera, setIsStartingCamera] = useState<boolean>(false);
   const [scanSuccessFlash, setScanSuccessFlash] = useState<boolean>(false);
   const [result, setResult] = useState<ScanResult | null>(null);
+
+  const handleDismissError = useCallback(() => {
+    setScanError(null);
+    setIsResetting(true);
+    setScannerKey((prev) => prev + 1);
+  }, []);
+
+  // Monitor camera video stream readiness: keep loader visible until video actually starts playing
+  useEffect(() => {
+    if (!isCameraActive || (!isResetting && !isStartingCamera)) return;
+
+    let checkInterval: NodeJS.Timeout | null = null;
+    let fallbackTimeout: NodeJS.Timeout | null = null;
+
+    const hideLoader = () => {
+      setIsResetting(false);
+      setIsStartingCamera(false);
+      if (checkInterval) clearInterval(checkInterval);
+      if (fallbackTimeout) clearTimeout(fallbackTimeout);
+    };
+
+    const checkVideoPlaying = () => {
+      const videoEl = document.querySelector<HTMLVideoElement>("video");
+      if (videoEl) {
+        if (!videoEl.paused && videoEl.readyState >= 2 && videoEl.currentTime > 0) {
+          hideLoader();
+          return true;
+        }
+        videoEl.addEventListener("playing", hideLoader, { once: true });
+        videoEl.addEventListener("canplay", hideLoader, { once: true });
+      }
+      return false;
+    };
+
+    if (!checkVideoPlaying()) {
+      checkInterval = setInterval(() => {
+        checkVideoPlaying();
+      }, 100);
+    }
+
+    // Safety fallback: if video playing event doesn't fire within 4 seconds, hide loader
+    fallbackTimeout = setTimeout(() => {
+      hideLoader();
+    }, 4000);
+
+    return () => {
+      if (checkInterval) clearInterval(checkInterval);
+      if (fallbackTimeout) clearTimeout(fallbackTimeout);
+    };
+  }, [isCameraActive, isResetting, isStartingCamera, scannerKey]);
 
   // Mobile camera device selection, Torch, Auto Enhance & Auto Zoom
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
@@ -533,7 +684,9 @@ export default function Scanner({ onScanSuccess }: ScannerProps) {
 
     try {
       const devices = await navigator.mediaDevices.enumerateDevices();
-      const videoInputs = devices.filter((d) => d.kind === "videoinput");
+      const videoInputs = devices.filter(
+        (d) => d.kind === "videoinput" && d.deviceId && d.deviceId.trim() !== "",
+      );
       setVideoDevices(videoInputs);
 
       if (videoInputs.length > 0) {
@@ -576,12 +729,15 @@ export default function Scanner({ onScanSuccess }: ScannerProps) {
     setIsTorchOn(false); // Do not turn flash on by default
     isProcessingRef.current = false;
     resultRef.current = null;
+    setIsStartingCamera(true);
     setIsCameraActive(true);
   };
 
   const stopCamera = useCallback(() => {
     isProcessingRef.current = false;
     setIsCameraActive(false);
+    setIsStartingCamera(false);
+    setIsResetting(false);
     setScanSuccessFlash(false);
     setIsTorchOn(false);
   }, []);
@@ -661,7 +817,7 @@ export default function Scanner({ onScanSuccess }: ScannerProps) {
       try {
         isProcessingRef.current = true;
         const scanRes = await processDecodedQrResult(rawText);
-        if (!scanRes.parsed) {
+        if (!scanRes.parsed || (!scanRes.parsed.name && !scanRes.parsed.referenceId)) {
           setScanError(DEFAULT_INVALID_QR_MSG);
           return;
         }
@@ -709,7 +865,7 @@ export default function Scanner({ onScanSuccess }: ScannerProps) {
     setIsUploading(true);
     try {
       const scanRes = await scanAadhaarQr(file);
-      if (!scanRes.parsed) {
+      if (!scanRes.parsed || (!scanRes.parsed.name && !scanRes.parsed.referenceId)) {
         setScanError(DEFAULT_INVALID_QR_MSG);
         return;
       }
@@ -720,6 +876,7 @@ export default function Scanner({ onScanSuccess }: ScannerProps) {
       setScanError(err instanceof Error ? err.message : DEFAULT_INVALID_QR_MSG);
     } finally {
       setIsUploading(false);
+      e.target.value = "";
     }
   };
 
@@ -730,7 +887,7 @@ export default function Scanner({ onScanSuccess }: ScannerProps) {
     setScanError(null);
     try {
       const scanRes = await parseRawPayloadText(rawPayloadInput);
-      if (!scanRes.parsed) {
+      if (!scanRes.parsed || (!scanRes.parsed.name && !scanRes.parsed.referenceId)) {
         setScanError(DEFAULT_INVALID_QR_MSG);
         return;
       }
@@ -759,10 +916,10 @@ export default function Scanner({ onScanSuccess }: ScannerProps) {
       });
 
       const json = await response.json();
-      if (!json.success || !json.parsed) {
+      if (!json.success || !json.parsed || (!json.parsed.name && !json.parsed.referenceId)) {
         setScanError(
           json.error ||
-            "Python QR Decoder: Could not detect or decode QR code pattern in uploaded image.",
+            DEFAULT_INVALID_QR_MSG,
         );
         return;
       }
@@ -791,13 +948,14 @@ export default function Scanner({ onScanSuccess }: ScannerProps) {
       );
     } finally {
       setIsUploading(false);
+      e.target.value = "";
     }
   };
 
   // Reset Scanner when user clicks "Scan Another"
   const handleReset = () => {
     updateResult(null);
-    setScanError(null);
+    handleDismissError();
     setScanSuccessFlash(false);
     isProcessingRef.current = false;
     if (activeTab === "camera") {
@@ -856,25 +1014,31 @@ export default function Scanner({ onScanSuccess }: ScannerProps) {
             {!isCameraActive ? (
               <CameraPlaceholder onOpen={startCamera} />
             ) : (
-              <button
-                type="button"
+              <div
                 className={styles.videoViewportSquare}
                 onClick={handleTapToFocus}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    handleTapToFocus(e as unknown as React.MouseEvent<HTMLElement>);
+                  }
+                }}
+                tabIndex={0}
+                role="region"
                 aria-label="Camera viewport - tap anywhere to focus"
               >
                 <ReactQrScanner
-                  key={selectedDeviceId || "default-camera"}
+                  key={`${selectedDeviceId || "default-camera"}_${scannerKey}`}
                   onScan={handleScan}
                   onError={(err) => {
                     if (err instanceof Error) setScanError(err.message);
                   }}
-                  scanDelay={1}
+                  scanDelay={150}
                   allowMultiple={false}
                   formats={["qr_code"]}
                   constraints={
-                    selectedDeviceId
+                    selectedDeviceId && selectedDeviceId.trim() !== ""
                       ? {
-                          deviceId: { exact: selectedDeviceId },
+                          deviceId: { ideal: selectedDeviceId },
                           width: { ideal: 1920 },
                           height: { ideal: 1080 },
                         }
@@ -886,9 +1050,11 @@ export default function Scanner({ onScanSuccess }: ScannerProps) {
                   }
                   styles={{
                     container: {
+                      position: "relative",
                       width: "100%",
                       height: "100%",
                       borderRadius: "18px",
+                      overflow: "hidden",
                     },
                     video: {
                       width: "100%",
@@ -896,13 +1062,7 @@ export default function Scanner({ onScanSuccess }: ScannerProps) {
                       objectFit: "cover",
                       transform: `scale(${zoomLevel}) translateZ(0)`,
                       WebkitTransform: `scale(${zoomLevel}) translateZ(0)`,
-                      filter: autoEnhance
-                        ? "contrast(160%) brightness(125%) saturate(115%)"
-                        : "none",
-                      WebkitFilter: autoEnhance
-                        ? "contrast(160%) brightness(125%) saturate(115%)"
-                        : "none",
-                      transition: "transform 0.3s ease, filter 0.3s ease",
+                      transition: "transform 0.3s ease",
                     },
                   }}
                   components={{
@@ -944,32 +1104,68 @@ export default function Scanner({ onScanSuccess }: ScannerProps) {
                     <button
                       type="button"
                       className={styles.viewportTorchTipOverlay}
-                      onClick={toggleTorch}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleTorch();
+                      }}
                     >
                       💡 Turn On Flash for Faster Scan
                     </button>
                   )}
 
-                {scanError && !scanSuccessFlash && (
-                  <div className={styles.viewportErrorOverlay}>
-                    <span className={styles.errorIcon}>⚠️</span>
-                    <p className={styles.errorMessageText}>{scanError}</p>
-                    <button
-                      type="button"
-                      className={styles.dismissErrorBtn}
-                      onClick={() => setScanError(null)}
+                {scanError && !scanSuccessFlash && !isResetting && !isStartingCamera && (
+                  <ErrorAlertCard
+                    message={scanError}
+                    onDismiss={handleDismissError}
+                    isOverlay={true}
+                  />
+                )}
+
+                {(isStartingCamera || isResetting) && (
+                  <div className={styles.viewportResetLoadingOverlay}>
+                    <svg
+                      className={styles.uploadSpinnerSvg}
+                      viewBox="0 0 50 50"
+                      width="28"
+                      height="28"
+                      role="img"
+                      aria-label="Opening camera scanner"
                     >
-                      Dismiss & Continue
-                    </button>
+                      <title>Opening camera scanner</title>
+                      <circle
+                        cx="25"
+                        cy="25"
+                        r="20"
+                        fill="none"
+                        stroke="rgba(255, 255, 255, 0.25)"
+                        strokeWidth="4"
+                      />
+                      <circle
+                        cx="25"
+                        cy="25"
+                        r="20"
+                        fill="none"
+                        stroke="#ffffff"
+                        strokeWidth="4"
+                        strokeDasharray="80 50"
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                    <span>
+                      {isStartingCamera
+                        ? "📷 Opening Camera Scanner..."
+                        : "Re-initializing Scanner..."}
+                    </span>
                   </div>
                 )}
 
                 {scanSuccessFlash && (
                   <div className={styles.viewportSuccessOverlay}>
-                    <div className={styles.successCircle}>
+                    <div className={styles.successBadgeCircle}>
                       <svg
-                        width="48"
-                        height="48"
+                        className={styles.successCheckSvg}
+                        width="36"
+                        height="36"
                         viewBox="0 0 24 24"
                         fill="none"
                         stroke="currentColor"
@@ -983,10 +1179,13 @@ export default function Scanner({ onScanSuccess }: ScannerProps) {
                         <polyline points="20 6 9 17 4 12" />
                       </svg>
                     </div>
-                    <span>Aadhaar QR Verified!</span>
+                    <div className={styles.successTextGroup}>
+                      <h3 className={styles.successTitle}>Aadhaar QR Verified</h3>
+                      <p className={styles.successSubtitle}>UIDAI Digital Signature Validated</p>
+                    </div>
                   </div>
                 )}
-              </button>
+              </div>
             )}
 
             {isCameraActive && (
@@ -1029,9 +1228,11 @@ export default function Scanner({ onScanSuccess }: ScannerProps) {
         )}
 
         {activeTab !== "camera" && scanError && (
-          <div className={styles.errorAlert}>
-            <strong>Error:</strong> {scanError}
-          </div>
+          <ErrorAlertCard
+            message={scanError}
+            onDismiss={handleDismissError}
+            isOverlay={false}
+          />
         )}
       </div>
     </div>

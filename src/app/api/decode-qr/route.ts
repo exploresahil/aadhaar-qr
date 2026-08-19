@@ -166,31 +166,41 @@ async function decodeWithWasmServerless(buffer: Buffer) {
     };
   }
 
-  const scanRes = await processDecodedQrResult(rawText);
-  if (!scanRes.parsed) {
+  try {
+    const scanRes = await processDecodedQrResult(rawText);
+    if (!scanRes.parsed || (!scanRes.parsed.name && !scanRes.parsed.referenceId)) {
+      return {
+        success: false,
+        error: "Invalid QR Code: Scanned QR code is not a valid UIDAI Aadhaar QR code.",
+      };
+    }
+
+    const photoBase64 =
+      scanRes.parsed.photo && scanRes.parsed.photo.length > 0
+        ? Buffer.from(scanRes.parsed.photo).toString("base64")
+        : "";
+
+    return {
+      success: true,
+      version: scanRes.parsed.version || "V2/V3",
+      raw_text: rawText,
+      raw_len: rawText.length,
+      compressed_len: scanRes.bytes.length,
+      decompressed_len: scanRes.bytes.length,
+      parsed: scanRes.parsed,
+      signatureHex: scanRes.parsed.signatureHex || "",
+      photoLen: scanRes.parsed.photo?.length || 0,
+      photoBase64,
+    };
+  } catch (err) {
     return {
       success: false,
-      error: "Could not parse Aadhaar QR payload.",
+      error:
+        err instanceof Error
+          ? err.message
+          : "Invalid QR Code: Scanned QR code is not a valid UIDAI Aadhaar QR code.",
     };
   }
-
-  const photoBase64 =
-    scanRes.parsed.photo && scanRes.parsed.photo.length > 0
-      ? Buffer.from(scanRes.parsed.photo).toString("base64")
-      : "";
-
-  return {
-    success: true,
-    version: scanRes.parsed.version || "V2/V3",
-    raw_text: rawText,
-    raw_len: rawText.length,
-    compressed_len: scanRes.bytes.length,
-    decompressed_len: scanRes.bytes.length,
-    parsed: scanRes.parsed,
-    signatureHex: scanRes.parsed.signatureHex || "",
-    photoLen: scanRes.parsed.photo?.length || 0,
-    photoBase64,
-  };
 }
 
 /**
@@ -220,7 +230,14 @@ async function tryExecutePython(buffer: Buffer, fileName: string) {
     ]);
 
     const pythonResult = JSON.parse(stdout.trim());
-    return pythonResult.success ? pythonResult : null;
+    if (pythonResult.success) {
+      return pythonResult;
+    }
+    // Return Python error if it explicitly identified an invalid Aadhaar QR code
+    if (pythonResult.error && pythonResult.error.includes("Invalid QR Code")) {
+      return pythonResult;
+    }
+    return null;
   } catch {
     return null;
   } finally {

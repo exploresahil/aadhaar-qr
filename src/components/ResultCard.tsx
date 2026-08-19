@@ -62,19 +62,6 @@ export default function ResultCard({
   const [copiedText, setCopiedText] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
 
-  // Compute SHA-256 hash of signatureHex (or rawText if no signature)
-  const signatureHash = useMemo(() => {
-    const source = data.signatureHex || rawText || "";
-    if (!source) return "—";
-    // Fast synchronous hash calculation simulation for display / instant clipboard copy
-    let hash = 0;
-    for (let i = 0; i < source.length; i++) {
-      hash = (hash << 5) - hash + source.charCodeAt(i);
-      hash |= 0;
-    }
-    return hash;
-  }, [data.signatureHex, rawText]);
-
   const [asyncSigHash, setAsyncSigHash] = useState<string>("Calculating...");
 
   useEffect(() => {
@@ -110,9 +97,6 @@ export default function ResultCard({
     return data.version?.toLowerCase().includes("xml") ?? false;
   }, [data.version]);
 
-  // Masked Aadhaar number format:
-  // - Legacy XML QR: referenceId is 12-digit UID (e.g. 611172431644) -> last 4 digits are at the end (1644)
-  // - V2/V3/V5 Secure QR: first 4 digits of referenceId are the last 4 digits of Aadhaar number
   const maskedAadhaar = useMemo(() => {
     const ref = data.referenceId ? data.referenceId.trim() : "";
     if (!ref || ref === "UNVERIFIED") return "XXXX-XXXX-XXXX";
@@ -126,12 +110,10 @@ export default function ResultCard({
     return `XXXX-XXXX-${last4}`;
   }, [data.referenceId, isXmlFormat]);
 
-  // Calculated Age numeric string
   const ageDisplay = useMemo(() => {
     return calculateAge(data.dob);
   }, [data.dob]);
 
-  // Full IST timestamp of when QR was scanned
   const scanTimestampIst = useMemo(() => {
     return `${new Date().toLocaleString("en-IN", {
       timeZone: "Asia/Kolkata",
@@ -153,15 +135,15 @@ export default function ResultCard({
   const bitIndicatorLabel = useMemo(() => {
     switch (data.bitIndicator) {
       case 0:
-        return "No Email / Mobile present";
+        return "No Email / Mobile in Payload";
       case 1:
-        return "Only Email present";
+        return "Email Hash Present";
       case 2:
-        return "Only Mobile present";
+        return "Mobile Hash Present";
       case 3:
-        return "Both Email & Mobile present";
+        return "Email & Mobile Hashes Present";
       default:
-        return "Unknown";
+        return "Standard Payload";
     }
   }, [data.bitIndicator]);
 
@@ -198,26 +180,18 @@ export default function ResultCard({
         name: data.name,
         dob: data.dob,
         age: ageDisplay || "—",
-        gender: data.gender,
-        mobile: data.mobile,
-        careOf: data.careOf,
-        house: data.house,
-        street: data.street,
-        landmark: data.landmark,
-        location: data.location,
-        vtc: data.vtc,
-        subDistrict: data.subDistrict,
-        district: data.district,
-        postOffice: data.postOffice,
-        state: data.state,
+        gender: genderDisplay,
+        mobile: data.mobile || null,
         pincode: data.pincode,
-        bitIndicator: data.bitIndicator,
+        address: fullAddress,
         isVerified: data.isVerified !== false,
-        hashMobile: data.hashMobile,
-        hashEmail: data.hashEmail,
-        signature: data.signatureHex,
+        signatureHex: data.signatureHex || null,
         signatureHash: asyncSigHash,
+        hashMobile: data.hashMobile || null,
+        hashEmail: data.hashEmail || null,
+        rawPayload: rawText || null,
       };
+
       await navigator.clipboard.writeText(
         JSON.stringify(serializableData, null, 2),
       );
@@ -229,9 +203,9 @@ export default function ResultCard({
   };
 
   const handleCopyPayload = async () => {
+    if (!rawText) return;
     try {
-      const textToCopy = rawText || data.referenceId || "";
-      await navigator.clipboard.writeText(textToCopy);
+      await navigator.clipboard.writeText(rawText);
       setCopiedPayload(true);
       setTimeout(() => setCopiedPayload(false), 2000);
     } catch {
@@ -248,7 +222,7 @@ export default function ResultCard({
         `Reference ID: ${data.referenceId || "N/A"}`,
         `DOB: ${data.dob || "N/A"}`,
         `Age: ${ageDisplay || "N/A"}`,
-        `Gender: ${data.gender || "N/A"}`,
+        `Gender: ${genderDisplay}`,
         ...(data.mobile ? [`Mobile: ${data.mobile}`] : []),
         `PIN Code: ${data.pincode || "N/A"}`,
         `Address: ${fullAddress || "N/A"}`,
@@ -285,18 +259,30 @@ export default function ResultCard({
         </div>
       )}
 
+      {/* Hero Header */}
       <div className={styles.header}>
         <div className={styles.headerTitleGroup}>
-          <span
-            className={`${styles.badge} ${data.isVerified === false ? styles.badgeUnverified : ""}`}
-          >
-            {data.isVerified === false
-              ? `⚠️ UNVERIFIED AADHAAR QR (${data.version || "XML"})`
-              : `✓ VERIFIED SECURE QR (${data.version || "V2/V3"})`}
-          </span>
+          <div className={styles.statusBadgeRow}>
+            <span
+              className={`${styles.badge} ${data.isVerified === false ? styles.badgeUnverified : styles.badgeVerified}`}
+            >
+              {data.isVerified === false
+                ? `⚠️ UNVERIFIED (${data.version || "XML"})`
+                : `✓ UIDAI SECURE VERIFIED (${data.version || "V2/V3"})`}
+            </span>
+            <span className={styles.timestampBadge}>
+              🕒 {scanTimestampIst}
+            </span>
+          </div>
+
           <h2 className={styles.name}>{data.name || "Aadhaar Holder"}</h2>
-          <p className={styles.refId}>Aadhaar: {maskedAadhaar}</p>
+
+          <div className={styles.refIdContainer}>
+            <span className={styles.refIdLabel}>Aadhaar Number:</span>
+            <code className={styles.refIdValue}>{maskedAadhaar}</code>
+          </div>
         </div>
+
         <div className={styles.headerActions}>
           <button
             type="button"
@@ -313,23 +299,30 @@ export default function ResultCard({
           >
             {copiedPayload ? "✓ Copied Payload" : "⚡ Copy Payload"}
           </button>
+
           <button
             type="button"
             className={styles.copyBtn}
             onClick={handleCopyPlainText}
           >
-            {copiedText ? "✓ Copied Text" : "📄 Copy Plain Text"}
+            {copiedText ? "✓ Copied Text" : "📄 Copy Text"}
           </button>
+
           {onReset && (
-            <button type="button" className={styles.resetBtn} onClick={onReset}>
+            <button
+              type="button"
+              className={styles.resetBtn}
+              onClick={onReset}
+            >
               🔄 Scan Another
             </button>
           )}
         </div>
       </div>
 
+      {/* Body 2-Column Grid */}
       <div className={styles.bodyGrid}>
-        {/* Photo Column */}
+        {/* Left Column: Resident Photo & Profile Cards */}
         <div className={styles.photoCol}>
           <div className={styles.photoFrame}>
             {photoUrl ? (
@@ -337,250 +330,185 @@ export default function ResultCard({
               <img src={photoUrl} alt="Resident" className={styles.photoImg} />
             ) : (
               <div className={styles.photoFallback}>
+                <div className={styles.photoIcon}>📷</div>
                 <span>JP2000 Photo</span>
-                <small>({data.photo?.length || 0} bytes)</small>
+                <small>({data.photo?.length || 0} bytes stream)</small>
               </div>
             )}
           </div>
-          <div className={styles.indicatorBadge}>{bitIndicatorLabel}</div>
+
+          <div className={styles.quickMetricsBox}>
+            <div className={styles.metricPill}>
+              <span className={styles.metricLabel}>GENDER</span>
+              <span className={styles.metricVal}>{genderDisplay}</span>
+            </div>
+            <div className={styles.metricPill}>
+              <span className={styles.metricLabel}>AGE</span>
+              <span className={styles.metricVal}>
+                {ageDisplay ? `${ageDisplay} Yrs` : "—"}
+              </span>
+            </div>
+          </div>
+
+          <div className={styles.indicatorBadge}>
+            <span className={styles.indicatorDot} />
+            {bitIndicatorLabel}
+          </div>
         </div>
 
-        {/* Demographics Column */}
+        {/* Right Column: Categorized Section Cards */}
         <div className={styles.infoCol}>
-          <div className={styles.infoRow}>
-            <span className={styles.label}>Scanned At (IST)</span>
-            <span className={styles.value}>{scanTimestampIst}</span>
-          </div>
-
-          <div className={styles.infoRow}>
-            <span className={styles.label}>
-              {isXmlFormat ? "Aadhaar Number (12-Digit UID)" : "Reference ID"}
-              <small
-                style={{
-                  display: "block",
-                  fontSize: "0.725rem",
-                  color: "#16a34a",
-                  fontWeight: 500,
-                  marginTop: "2px",
-                }}
-              >
-                {isXmlFormat
-                  ? "✓ Direct 12-Digit Aadhaar UID from XML Payload"
-                  : "✓ Direct from QR Payload"}
-              </small>
-            </span>
-            <code className={styles.hashCode}>{data.referenceId || "—"}</code>
-          </div>
-
-          <div className={styles.infoRow}>
-            <span className={styles.label}>
-              Masked Aadhaar Number
-              <small
-                style={{
-                  display: "block",
-                  fontSize: "0.725rem",
-                  color: "#6e6e73",
-                  fontWeight: 400,
-                  marginTop: "2px",
-                }}
-              >
-                {isXmlFormat
-                  ? "Calculated client-side from 12-digit UID"
-                  : "Calculated client-side from Reference ID"}
-              </small>
-            </span>
-            <span className={styles.valueHighlight}>{maskedAadhaar}</span>
-          </div>
-
-          {data.mobile && (
-            <div className={styles.infoRow}>
-              <span className={styles.label}>
-                Mobile Number
-                <small
-                  style={{
-                    display: "block",
-                    fontSize: "0.725rem",
-                    color: "#16a34a",
-                    fontWeight: 500,
-                    marginTop: "2px",
-                  }}
-                >
-                  ✓ Direct from QR Payload
-                </small>
-              </span>
-              <span className={styles.valueHighlight}>{data.mobile}</span>
+          {/* Section 1: Demographics */}
+          <div className={styles.sectionCard}>
+            <div className={styles.sectionCardHeader}>
+              <div className={styles.sectionIcon}>👤</div>
+              <h3>Demographic Info</h3>
             </div>
-          )}
-
-          <div className={styles.infoRow}>
-            <span className={styles.label}>
-              Date of Birth
-              <small
-                style={{
-                  display: "block",
-                  fontSize: "0.725rem",
-                  color: "#16a34a",
-                  fontWeight: 500,
-                  marginTop: "2px",
-                }}
-              >
-                ✓ Direct from QR Payload
-              </small>
-            </span>
-            <span className={styles.value}>{data.dob || "—"}</span>
-          </div>
-
-          <div className={styles.infoRow}>
-            <span className={styles.label}>
-              Age
-              <small
-                style={{
-                  display: "block",
-                  fontSize: "0.725rem",
-                  color: "#6e6e73",
-                  fontWeight: 400,
-                  marginTop: "2px",
-                }}
-              >
-                Calculated client-side from DOB
-              </small>
-            </span>
-            <span className={styles.valueHighlight}>{ageDisplay || "—"}</span>
-          </div>
-
-          <div className={styles.infoRow}>
-            <span className={styles.label}>
-              Gender
-              <small
-                style={{
-                  display: "block",
-                  fontSize: "0.725rem",
-                  color: "#16a34a",
-                  fontWeight: 500,
-                  marginTop: "2px",
-                }}
-              >
-                ✓ Direct from QR Payload
-              </small>
-            </span>
-            <span className={styles.value}>{genderDisplay}</span>
-          </div>
-
-          <div className={styles.infoRow}>
-            <span className={styles.label}>
-              PIN Code
-              <small
-                style={{
-                  display: "block",
-                  fontSize: "0.725rem",
-                  color: "#16a34a",
-                  fontWeight: 500,
-                  marginTop: "2px",
-                }}
-              >
-                ✓ Direct from QR Payload
-              </small>
-            </span>
-            <span className={styles.valueHighlight}>{data.pincode || "—"}</span>
-          </div>
-
-          <div className={styles.infoRow}>
-            <span className={styles.label}>
-              Full Address
-              <small
-                style={{
-                  display: "block",
-                  fontSize: "0.725rem",
-                  color: "#16a34a",
-                  fontWeight: 500,
-                  marginTop: "2px",
-                }}
-              >
-                ✓ Direct from QR Payload
-              </small>
-            </span>
-            <span className={styles.value}>{fullAddress || "—"}</span>
-          </div>
-
-          <div className={styles.infoRow}>
-            <span className={styles.label}>
-              Signature Hash (Client-Side SHA-256)
-              <small
-                style={{
-                  display: "block",
-                  fontSize: "0.725rem",
-                  color: "#6e6e73",
-                  fontWeight: 400,
-                  marginTop: "2px",
-                }}
-              >
-                {data.signatureHex
-                  ? "Calculated client-side from UIDAI 256-byte RSA signature for indexing"
-                  : "Calculated client-side from raw XML payload text"}
-              </small>
-            </span>
-            <code className={styles.hashCode}>{asyncSigHash}</code>
-          </div>
-
-          {data.signatureHex && (
-            <div className={styles.infoRow}>
-              <span className={styles.label}>
-                UIDAI Digital Signature (256 Bytes)
-                <small
-                  style={{
-                    display: "block",
-                    fontSize: "0.725rem",
-                    color: "#16a34a",
-                    fontWeight: 500,
-                    marginTop: "2px",
-                  }}
-                >
-                  ✓ Direct 256-Byte RSA Signature from QR Payload
-                </small>
-              </span>
-              <code className={styles.hashCode}>{data.signatureHex}</code>
+            <div className={styles.fieldsGrid}>
+              <div className={styles.fieldBox}>
+                <span className={styles.fieldLabel}>Full Name</span>
+                <span className={styles.fieldValue}>{data.name || "—"}</span>
+              </div>
+              <div className={styles.fieldBox}>
+                <span className={styles.fieldLabel}>Date of Birth</span>
+                <span className={styles.fieldValue}>{data.dob || "—"}</span>
+              </div>
+              <div className={styles.fieldBox}>
+                <span className={styles.fieldLabel}>Age</span>
+                <span className={styles.fieldValueHighlight}>
+                  {ageDisplay ? `${ageDisplay} Years` : "—"}
+                </span>
+              </div>
+              <div className={styles.fieldBox}>
+                <span className={styles.fieldLabel}>Gender</span>
+                <span className={styles.fieldValue}>{genderDisplay}</span>
+              </div>
+              {data.mobile && (
+                <div className={styles.fieldBox}>
+                  <span className={styles.fieldLabel}>Mobile Number</span>
+                  <span className={styles.fieldValueHighlight}>
+                    {data.mobile}
+                  </span>
+                </div>
+              )}
+              <div className={styles.fieldBox}>
+                <span className={styles.fieldLabel}>
+                  {isXmlFormat
+                    ? "Aadhaar UID (12-Digit)"
+                    : "Reference ID"}
+                </span>
+                <code className={styles.fieldCode}>
+                  {data.referenceId || "—"}
+                </code>
+              </div>
             </div>
-          )}
+          </div>
 
-          {data.hashMobile && (
-            <div className={styles.infoRow}>
-              <span className={styles.label}>
-                Mobile Hash (SHA-256)
-                <small
-                  style={{
-                    display: "block",
-                    fontSize: "0.725rem",
-                    color: "#16a34a",
-                    fontWeight: 500,
-                    marginTop: "2px",
-                  }}
-                >
-                  ✓ Direct 32-Byte Hash from QR Payload
-                </small>
-              </span>
-              <code className={styles.hashCode}>{data.hashMobile}</code>
+          {/* Section 2: Resident Address */}
+          <div className={styles.sectionCard}>
+            <div className={styles.sectionCardHeader}>
+              <div className={styles.sectionIcon}>📍</div>
+              <h3>Resident Address</h3>
             </div>
-          )}
+            <div className={styles.fieldsGrid}>
+              <div className={`${styles.fieldBox} ${styles.fullWidthField}`}>
+                <span className={styles.fieldLabel}>Full Address</span>
+                <span className={styles.fieldValue}>{fullAddress || "—"}</span>
+              </div>
+              {data.house && (
+                <div className={styles.fieldBox}>
+                  <span className={styles.fieldLabel}>House / Flat No</span>
+                  <span className={styles.fieldValue}>{data.house}</span>
+                </div>
+              )}
+              {data.street && (
+                <div className={styles.fieldBox}>
+                  <span className={styles.fieldLabel}>Street / Road</span>
+                  <span className={styles.fieldValue}>{data.street}</span>
+                </div>
+              )}
+              {data.landmark && (
+                <div className={styles.fieldBox}>
+                  <span className={styles.fieldLabel}>Landmark</span>
+                  <span className={styles.fieldValue}>{data.landmark}</span>
+                </div>
+              )}
+              {data.location && (
+                <div className={styles.fieldBox}>
+                  <span className={styles.fieldLabel}>Location</span>
+                  <span className={styles.fieldValue}>{data.location}</span>
+                </div>
+              )}
+              {data.vtc && (
+                <div className={styles.fieldBox}>
+                  <span className={styles.fieldLabel}>City / VTC</span>
+                  <span className={styles.fieldValue}>{data.vtc}</span>
+                </div>
+              )}
+              {data.subDistrict && (
+                <div className={styles.fieldBox}>
+                  <span className={styles.fieldLabel}>Sub-District</span>
+                  <span className={styles.fieldValue}>{data.subDistrict}</span>
+                </div>
+              )}
+              {data.district && (
+                <div className={styles.fieldBox}>
+                  <span className={styles.fieldLabel}>District</span>
+                  <span className={styles.fieldValue}>{data.district}</span>
+                </div>
+              )}
+              {data.state && (
+                <div className={styles.fieldBox}>
+                  <span className={styles.fieldLabel}>State</span>
+                  <span className={styles.fieldValue}>{data.state}</span>
+                </div>
+              )}
+              <div className={styles.fieldBox}>
+                <span className={styles.fieldLabel}>PIN Code</span>
+                <span className={styles.fieldValueHighlight}>
+                  {data.pincode || "—"}
+                </span>
+              </div>
+            </div>
+          </div>
 
-          {data.hashEmail && (
-            <div className={styles.infoRow}>
-              <span className={styles.label}>
-                Email Hash (SHA-256)
-                <small
-                  style={{
-                    display: "block",
-                    fontSize: "0.725rem",
-                    color: "#16a34a",
-                    fontWeight: 500,
-                    marginTop: "2px",
-                  }}
-                >
-                  ✓ Direct 32-Byte Hash from QR Payload
-                </small>
-              </span>
-              <code className={styles.hashCode}>{data.hashEmail}</code>
+          {/* Section 3: Security & Cryptography */}
+          <div className={styles.sectionCard}>
+            <div className={styles.sectionCardHeader}>
+              <div className={styles.sectionIcon}>🔒</div>
+              <h3>Security & Cryptography</h3>
             </div>
-          )}
+            <div className={styles.fieldsGrid}>
+              <div className={`${styles.fieldBox} ${styles.fullWidthField}`}>
+                <span className={styles.fieldLabel}>
+                  SHA-256 Signature Hash (Client-Side)
+                </span>
+                <code className={styles.fieldCode}>{asyncSigHash}</code>
+              </div>
+              {data.signatureHex && (
+                <div className={`${styles.fieldBox} ${styles.fullWidthField}`}>
+                  <span className={styles.fieldLabel}>
+                    UIDAI 256-Byte RSA Digital Signature
+                  </span>
+                  <code className={styles.fieldCodeScroll}>
+                    {data.signatureHex}
+                  </code>
+                </div>
+              )}
+              {data.hashMobile && (
+                <div className={`${styles.fieldBox} ${styles.fullWidthField}`}>
+                  <span className={styles.fieldLabel}>Mobile Hash (SHA-256)</span>
+                  <code className={styles.fieldCode}>{data.hashMobile}</code>
+                </div>
+              )}
+              {data.hashEmail && (
+                <div className={`${styles.fieldBox} ${styles.fullWidthField}`}>
+                  <span className={styles.fieldLabel}>Email Hash (SHA-256)</span>
+                  <code className={styles.fieldCode}>{data.hashEmail}</code>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -588,220 +516,271 @@ export default function ResultCard({
       <div className={styles.diagnosticsSection}>
         <button
           type="button"
-          className={styles.diagnosticsToggleBtn}
+          className={`${styles.diagnosticsToggleBtn} ${
+            showDiagnostics ? styles.diagnosticsActiveBtn : ""
+          }`}
           onClick={() => setShowDiagnostics((prev) => !prev)}
         >
-          <span>
-            🔬 Raw Payload & Technical Diagnostics ({data.version || "V2/V3"})
-          </span>
-          <span>{showDiagnostics ? "▲ Hide" : "▼ Inspect Raw Payload"}</span>
-        </button>
-
-        {showDiagnostics && (
-          <div className={styles.diagnosticsContent}>
-            {rawText && (
-              <div>
-                <div className={styles.rawTextHeader}>
-                  <label htmlFor="diagnostics-raw-payload">
-                    Raw QR Payload Text ({rawText.length} Chars):
-                  </label>
-                </div>
-                <textarea
-                  id="diagnostics-raw-payload"
-                  readOnly
-                  rows={4}
-                  value={rawText}
-                  className={styles.rawTextarea}
-                />
-              </div>
-            )}
-
-            <div className={styles.fieldsTableWrapper}>
-              <table className={styles.fieldsTable}>
-                <thead>
-                  <tr>
-                    <th>Field</th>
-                    <th>Property Name</th>
-                    <th>Parsed Value</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td>
-                      <code>Header / Version</code>
-                    </td>
-                    <td>version</td>
-                    <td>
-                      <strong>{data.version || "V2/V3"}</strong>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>
-                      <code>Bit Indicator</code>
-                    </td>
-                    <td>bitIndicator</td>
-                    <td>{data.bitIndicator}</td>
-                  </tr>
-                  <tr>
-                    <td>
-                      <code>Reference ID</code>
-                    </td>
-                    <td>referenceId</td>
-                    <td>
-                      <code>{data.referenceId || "—"}</code>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>
-                      <code>Name</code>
-                    </td>
-                    <td>name</td>
-                    <td>{data.name || "—"}</td>
-                  </tr>
-                  <tr>
-                    <td>
-                      <code>DOB</code>
-                    </td>
-                    <td>dob</td>
-                    <td>{data.dob || "—"}</td>
-                  </tr>
-                  <tr>
-                    <td>
-                      <code>Gender</code>
-                    </td>
-                    <td>gender</td>
-                    <td>{data.gender || "—"}</td>
-                  </tr>
-                  {data.mobile && (
-                    <tr>
-                      <td>
-                        <code>Mobile</code>
-                      </td>
-                      <td>mobile</td>
-                      <td>
-                        <strong>{data.mobile}</strong>
-                      </td>
-                    </tr>
-                  )}
-                  <tr>
-                    <td>
-                      <code>Care Of</code>
-                    </td>
-                    <td>careOf</td>
-                    <td>{data.careOf || "—"}</td>
-                  </tr>
-                  <tr>
-                    <td>
-                      <code>District</code>
-                    </td>
-                    <td>district</td>
-                    <td>{data.district || "—"}</td>
-                  </tr>
-                  <tr>
-                    <td>
-                      <code>Landmark</code>
-                    </td>
-                    <td>landmark</td>
-                    <td>{data.landmark || "—"}</td>
-                  </tr>
-                  <tr>
-                    <td>
-                      <code>House</code>
-                    </td>
-                    <td>house</td>
-                    <td>{data.house || "—"}</td>
-                  </tr>
-                  <tr>
-                    <td>
-                      <code>Location</code>
-                    </td>
-                    <td>location</td>
-                    <td>{data.location || "—"}</td>
-                  </tr>
-                  <tr>
-                    <td>
-                      <code>PIN Code</code>
-                    </td>
-                    <td>pincode</td>
-                    <td>{data.pincode || "—"}</td>
-                  </tr>
-                  <tr>
-                    <td>
-                      <code>Post Office</code>
-                    </td>
-                    <td>postOffice</td>
-                    <td>{data.postOffice || "—"}</td>
-                  </tr>
-                  <tr>
-                    <td>
-                      <code>State</code>
-                    </td>
-                    <td>state</td>
-                    <td>{data.state || "—"}</td>
-                  </tr>
-                  <tr>
-                    <td>
-                      <code>Street</code>
-                    </td>
-                    <td>street</td>
-                    <td>{data.street || "—"}</td>
-                  </tr>
-                  <tr>
-                    <td>
-                      <code>Sub District</code>
-                    </td>
-                    <td>subDistrict</td>
-                    <td>{data.subDistrict || "—"}</td>
-                  </tr>
-                  <tr>
-                    <td>
-                      <code>VTC</code>
-                    </td>
-                    <td>vtc</td>
-                    <td>{data.vtc || "—"}</td>
-                  </tr>
-                  <tr>
-                    <td>
-                      <code>JP2000 Photo</code>
-                    </td>
-                    <td>photo</td>
-                    <td>{data.photo?.length || 0} bytes binary stream</td>
-                  </tr>
-                  <tr>
-                    <td>
-                      <code>Signature Hash</code>
-                    </td>
-                    <td>signatureHash</td>
-                    <td>
-                      <code>{asyncSigHash}</code>
-                      <small
-                        style={{
-                          display: "block",
-                          color: "#6e6e73",
-                          marginTop: "2px",
-                        }}
-                      >
-                        (Computed client-side via SHA-256 for DB indexing; not
-                        embedded directly in QR payload)
-                      </small>
-                    </td>
-                  </tr>
-                  {data.signatureHex && (
-                    <tr>
-                      <td>
-                        <code>RSA Signature</code>
-                      </td>
-                      <td>signatureHex</td>
-                      <td>
-                        <code>{data.signatureHex.slice(0, 40)}...</code>
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+          <div className={styles.diagnosticsBtnLeft}>
+            <div className={styles.diagnosticsIconBadge}>🔬</div>
+            <div className={styles.diagnosticsBtnTitleGroup}>
+              <span className={styles.diagnosticsBtnTitle}>
+                Raw Payload & Technical Diagnostics
+              </span>
+              <span className={styles.diagnosticsVersionTag}>
+                {data.version || "SECURE QR"}
+              </span>
             </div>
           </div>
-        )}
+
+          <div className={styles.diagnosticsChevronBadge}>
+            <span>{showDiagnostics ? "Collapse" : "Inspect Raw Payload"}</span>
+            <svg
+              className={`${styles.chevronSvg} ${
+                showDiagnostics ? styles.chevronRotated : ""
+              }`}
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              role="img"
+              aria-label="Toggle diagnostics chevron"
+            >
+              <title>Toggle diagnostics chevron</title>
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </div>
+        </button>
+
+        <div
+          className={`${styles.diagnosticsAccordionWrapper} ${
+            showDiagnostics ? styles.accordionOpen : styles.accordionClosed
+          }`}
+        >
+          <div className={styles.diagnosticsAccordionInner}>
+            <div className={styles.diagnosticsContent}>
+              {rawText && (
+                <div className={styles.rawTextCard}>
+                  <div className={styles.rawTextHeader}>
+                    <label htmlFor="diagnostics-raw-payload">
+                      Raw QR Payload String ({rawText.length} Chars):
+                    </label>
+                    <button
+                      type="button"
+                      className={styles.rawCopyBtn}
+                      onClick={handleCopyPayload}
+                    >
+                      {copiedPayload ? "✓ Copied Payload" : "📋 Copy Payload"}
+                    </button>
+                  </div>
+                  <textarea
+                    id="diagnostics-raw-payload"
+                    readOnly
+                    rows={4}
+                    value={rawText}
+                    className={styles.rawTextarea}
+                  />
+                </div>
+              )}
+
+              <div className={styles.fieldsTableWrapper}>
+                <div className={styles.tableHeaderBar}>
+                  <h4>Parsed Fields & Metadata Registry</h4>
+                </div>
+                <table className={styles.fieldsTable}>
+                  <colgroup>
+                    <col className={styles.colField} />
+                    <col className={styles.colProperty} />
+                    <col className={styles.colValue} />
+                  </colgroup>
+                  <thead>
+                    <tr>
+                      <th>Field Name</th>
+                      <th>Schema Property</th>
+                      <th>Parsed Value</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>
+                        <code>Header / Version</code>
+                      </td>
+                      <td>version</td>
+                      <td>
+                        <strong>{data.version || "V2/V3"}</strong>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>
+                        <code>Bit Indicator</code>
+                      </td>
+                      <td>bitIndicator</td>
+                      <td>{data.bitIndicator}</td>
+                    </tr>
+                    <tr>
+                      <td>
+                        <code>Reference ID</code>
+                      </td>
+                      <td>referenceId</td>
+                      <td>
+                        <code>{data.referenceId || "—"}</code>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>
+                        <code>Name</code>
+                      </td>
+                      <td>name</td>
+                      <td>{data.name || "—"}</td>
+                    </tr>
+                    <tr>
+                      <td>
+                        <code>DOB</code>
+                      </td>
+                      <td>dob</td>
+                      <td>{data.dob || "—"}</td>
+                    </tr>
+                    <tr>
+                      <td>
+                        <code>Gender</code>
+                      </td>
+                      <td>gender</td>
+                      <td>{data.gender || "—"}</td>
+                    </tr>
+                    {data.mobile && (
+                      <tr>
+                        <td>
+                          <code>Mobile</code>
+                        </td>
+                        <td>mobile</td>
+                        <td>
+                          <strong>{data.mobile}</strong>
+                        </td>
+                      </tr>
+                    )}
+                    <tr>
+                      <td>
+                        <code>Care Of</code>
+                      </td>
+                      <td>careOf</td>
+                      <td>{data.careOf || "—"}</td>
+                    </tr>
+                    <tr>
+                      <td>
+                        <code>District</code>
+                      </td>
+                      <td>district</td>
+                      <td>{data.district || "—"}</td>
+                    </tr>
+                    <tr>
+                      <td>
+                        <code>Landmark</code>
+                      </td>
+                      <td>landmark</td>
+                      <td>{data.landmark || "—"}</td>
+                    </tr>
+                    <tr>
+                      <td>
+                        <code>House</code>
+                      </td>
+                      <td>house</td>
+                      <td>{data.house || "—"}</td>
+                    </tr>
+                    <tr>
+                      <td>
+                        <code>Location</code>
+                      </td>
+                      <td>location</td>
+                      <td>{data.location || "—"}</td>
+                    </tr>
+                    <tr>
+                      <td>
+                        <code>PIN Code</code>
+                      </td>
+                      <td>pincode</td>
+                      <td>{data.pincode || "—"}</td>
+                    </tr>
+                    <tr>
+                      <td>
+                        <code>Post Office</code>
+                      </td>
+                      <td>postOffice</td>
+                      <td>{data.postOffice || "—"}</td>
+                    </tr>
+                    <tr>
+                      <td>
+                        <code>State</code>
+                      </td>
+                      <td>state</td>
+                      <td>{data.state || "—"}</td>
+                    </tr>
+                    <tr>
+                      <td>
+                        <code>Street</code>
+                      </td>
+                      <td>street</td>
+                      <td>{data.street || "—"}</td>
+                    </tr>
+                    <tr>
+                      <td>
+                        <code>Sub District</code>
+                      </td>
+                      <td>subDistrict</td>
+                      <td>{data.subDistrict || "—"}</td>
+                    </tr>
+                    <tr>
+                      <td>
+                        <code>VTC</code>
+                      </td>
+                      <td>vtc</td>
+                      <td>{data.vtc || "—"}</td>
+                    </tr>
+                    <tr>
+                      <td>
+                        <code>JP2000 Photo</code>
+                      </td>
+                      <td>photo</td>
+                      <td>{data.photo?.length || 0} bytes binary stream</td>
+                    </tr>
+                    <tr>
+                      <td>
+                        <code>Signature Hash</code>
+                      </td>
+                      <td>signatureHash</td>
+                      <td>
+                        <code>{asyncSigHash}</code>
+                        <small
+                          style={{
+                            display: "block",
+                            color: "#6e6e73",
+                            marginTop: "2px",
+                          }}
+                        >
+                          (Computed client-side via SHA-256 for DB indexing)
+                        </small>
+                      </td>
+                    </tr>
+                    {data.signatureHex && (
+                      <tr>
+                        <td>
+                          <code>RSA Signature</code>
+                        </td>
+                        <td>signatureHex</td>
+                        <td>
+                          <code>{data.signatureHex.slice(0, 40)}...</code>
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

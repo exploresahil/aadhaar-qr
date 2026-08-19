@@ -135,17 +135,37 @@ def decode_qr_image(image_path):
     clean_str = raw_text.replace(" ", "").strip()
     is_bigint = clean_str.isdigit()
 
+    if (
+        clean_str.startswith("{")
+        or clean_str.startswith("[")
+        or "hidn" in raw_text
+        or "hid" in raw_text
+        or "health" in raw_text
+    ):
+        return {
+            "success": False,
+            "error": "Invalid QR Code: Scanned QR code is not a valid UIDAI Aadhaar QR code.",
+        }
+
     import re
     if "PrintLetterBarcodeData" in raw_text or "uid=" in raw_text or "<?xml" in raw_text:
         def get_attr(attr):
             m = re.search(r'' + attr + r'=(?:"|\')([^"\']*)(?:"|\')', raw_text, re.IGNORECASE)
             return m.group(1).strip() if m else ""
 
+        ref_id = get_attr("uid")
+        name = get_attr("name")
+        if not ref_id and not name:
+            return {
+                "success": False,
+                "error": "Invalid QR Code: Scanned QR code is not a valid UIDAI Aadhaar QR code.",
+            }
+
         parsed = {
             "version": "XML (Legacy)",
             "bitIndicator": 0,
-            "referenceId": get_attr("uid"),
-            "name": get_attr("name"),
+            "referenceId": ref_id,
+            "name": name,
             "dob": get_attr("dob") or get_attr("yob"),
             "gender": get_attr("gender"),
             "careOf": get_attr("co") or get_attr("gname"),
@@ -206,7 +226,7 @@ def decode_qr_image(image_path):
 
     first_field = fields[0].strip() if fields else ""
     is_v5 = first_field == "V5" or first_field.startswith("V5")
-    version = "V5" if is_v5 else ("V2/V3" if is_bigint else "XML")
+    version = "V5" if is_v5 else "V2/V3"
     offset = 1 if is_v5 else 0
 
     bit_indicator_raw = fields[1] if is_v5 and len(fields) > 1 else (fields[0] if fields else "0")
@@ -215,11 +235,20 @@ def decode_qr_image(image_path):
     def get_field(idx):
         return fields[idx] if idx < len(fields) else ""
 
+    parsed_name = get_field(offset + 2).strip()
+    parsed_ref_id = get_field(offset + 1).strip()
+
+    if not parsed_name and not parsed_ref_id:
+        return {
+            "success": False,
+            "error": "Invalid QR Code: Scanned QR code is not a valid UIDAI Aadhaar QR code.",
+        }
+
     parsed = {
         "version": version,
         "bitIndicator": bit_indicator,
-        "referenceId": get_field(offset + 1),
-        "name": get_field(offset + 2),
+        "referenceId": parsed_ref_id,
+        "name": parsed_name,
         "dob": get_field(offset + 3),
         "gender": get_field(offset + 4),
         "careOf": get_field(offset + 5),

@@ -253,54 +253,335 @@
   }
 }
 
-/* Viewport Error Overlay */
-.viewportErrorOverlay {
-  position: absolute;
-  top: 16px;
-  left: 16px;
-  right: 16px;
-  background: rgba(185, 28, 28, 0.92);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  color: #ffffff;
-  padding: 0.85rem 1rem;
-  border-radius: 12px;
-  z-index: 20;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-  animation: fadeInPop 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+/* Premium Apple-Grade Error Card Styles */
+.errorCardContainer {
+  font-family: var(--font-geist-sans, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
+  border-radius: 18px;
+  box-sizing: border-box;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: slideInUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-.errorIcon {
-  font-size: 1.25rem;
+@keyframes slideInUp {
+  0% {
+    opacity: 0;
+    transform: translateY(12px) scale(0.97);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes scaleInCenter {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.92);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+/* Floating Overlay Mode (centered dead in the middle of Camera Viewport) */
+.errorCardOverlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: calc(100% - 32px);
+  max-width: 420px;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  box-shadow: 0 24px 48px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(225, 29, 72, 0.2);
+  z-index: 50;
+  padding: 1.25rem;
+  animation: scaleInCenter 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+
+  @media (max-width: 480px) {
+    width: calc(100% - 24px);
+    padding: 1rem;
+  }
+}
+
+@keyframes centerPop {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+/* Viewport Reset Loading Overlay (Centered dead in middle of camera viewport) */
+.viewportResetLoadingOverlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(17, 24, 39, 0.94);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  color: #ffffff;
+  padding: 0.85rem 1.4rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  white-space: nowrap;
+  max-width: 90%;
+  box-sizing: border-box;
+  animation: centerPop 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+
+  span {
+    font-family: var(--font-geist-sans, sans-serif);
+    font-size: 0.85rem;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+  }
+}
+
+/* Viewport Success Verification Flash Overlay */
+.viewportSuccessOverlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: calc(100% - 48px);
+  max-width: 360px;
+  background: rgba(6, 78, 59, 0.94);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(52, 211, 153, 0.35);
+  box-shadow: 0 24px 50px -10px rgba(0, 0, 0, 0.6), 0 0 40px rgba(16, 185, 129, 0.3);
+  border-radius: 24px;
+  padding: 1.75rem 1.25rem;
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 1rem;
+  box-sizing: border-box;
+  animation: successPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+@keyframes successPop {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.85);
+  }
+  60% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.04);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+.successBadgeCircle {
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10px 25px -4px rgba(16, 185, 129, 0.6), 0 0 0 8px rgba(16, 185, 129, 0.2);
+  animation: pulseGreen 1.5s infinite;
+}
+
+@keyframes pulseGreen {
+  0% {
+    box-shadow: 0 10px 25px -4px rgba(16, 185, 129, 0.6), 0 0 0 0px rgba(16, 185, 129, 0.4);
+  }
+  70% {
+    box-shadow: 0 10px 25px -4px rgba(16, 185, 129, 0.6), 0 0 0 14px rgba(16, 185, 129, 0);
+  }
+  100% {
+    box-shadow: 0 10px 25px -4px rgba(16, 185, 129, 0.6), 0 0 0 0px rgba(16, 185, 129, 0);
+  }
+}
+
+.successCheckSvg {
+  stroke-dasharray: 50;
+  stroke-dashoffset: 0;
+  animation: drawCheck 0.4s cubic-bezier(0.65, 0, 0.45, 1) forwards;
+}
+
+@keyframes drawCheck {
+  0% {
+    stroke-dashoffset: 50;
+  }
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+.successTextGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.successTitle {
+  font-family: var(--font-geist-sans, sans-serif);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.successSubtitle {
+  font-family: var(--font-geist-sans, sans-serif);
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: rgba(209, 250, 229, 0.85);
+  margin: 0;
+  letter-spacing: 0.01em;
+}
+
+/* Inline Block Mode (Upload, Sample, Python tabs) */
+.errorCardInline {
+  margin-top: 1.5rem;
+  width: 100%;
+  background: #fff5f5;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  box-shadow: 0 10px 30px -8px rgba(225, 29, 72, 0.12);
+  padding: 1.25rem 1.35rem;
+}
+
+.errorCardHeader {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+}
+
+.errorIconBadge {
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  border-radius: 12px;
+  background: rgba(225, 29, 72, 0.12);
+  color: #e11d48;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: inset 0 0 0 1px rgba(225, 29, 72, 0.15);
+}
+
+.errorCardTextContent {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.errorCardTitle {
+  font-size: 0.95rem;
+  font-weight: 650;
+  color: #9f1239;
+  margin: 0;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+}
+
+.errorCardBody {
+  font-size: 0.835rem;
+  color: #4c0519;
+  margin: 0;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.errorCardCloseBtn {
+  background: transparent;
+  border: none;
+  color: #9f1239;
+  opacity: 0.6;
+  padding: 0.25rem;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  margin-left: -0.25rem;
+
+  &:hover {
+    opacity: 1;
+    background: rgba(225, 29, 72, 0.1);
+  }
+}
+
+.errorCardFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid rgba(225, 29, 72, 0.12);
+  flex-wrap: wrap;
+}
+
+.errorCardTipPill {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.775rem;
+  color: #881337;
+  background: rgba(225, 29, 72, 0.06);
+  padding: 0.4rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid rgba(225, 29, 72, 0.12);
+  line-height: 1.35;
+  flex: 1;
+  min-width: 200px;
+}
+
+.tipIcon {
+  font-size: 0.85rem;
   flex-shrink: 0;
 }
 
-.errorMessageText {
-  font-family: var(--font-geist-sans, sans-serif);
-  font-size: 0.825rem;
-  line-height: 1.35;
-  margin: 0;
-  flex: 1;
-}
-
-.dismissErrorBtn {
-  font-family: var(--font-geist-sans, sans-serif);
-  font-size: 0.75rem;
+.errorCardRetryBtn {
+  font-family: inherit;
+  font-size: 0.8rem;
   font-weight: 600;
-  background: #ffffff;
-  color: #b91c1c;
+  background: #e11d48;
+  color: #ffffff;
   border: none;
-  padding: 0.4rem 0.75rem;
-  border-radius: 6px;
+  padding: 0.45rem 1.15rem;
+  border-radius: 999px;
   cursor: pointer;
+  box-shadow: 0 4px 12px rgba(225, 29, 72, 0.25);
+  transition: all 0.2s ease;
   white-space: nowrap;
-  transition: opacity 0.2s ease;
 
   &:hover {
-    opacity: 0.9;
+    background: #be123c;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(225, 29, 72, 0.35);
+  }
+
+  &:active {
+    transform: translateY(0);
   }
 }
 
@@ -395,41 +676,7 @@
   }
 }
 
-/* Viewport Green Checkmark Success Flash Overlay */
-.viewportSuccessOverlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(22, 163, 74, 0.85);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  z-index: 30;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 1rem;
-  color: #ffffff;
-  font-family: var(--font-geist-sans, sans-serif);
-  font-size: 1.25rem;
-  font-weight: 600;
-  animation: fadeInPop 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-}
 
-.successCircle {
-  width: 72px;
-  height: 72px;
-  border-radius: 50%;
-  background: #ffffff;
-  color: #16a34a;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
-  animation: pulseScale 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-}
 
 @keyframes fadeInPop {
   from {

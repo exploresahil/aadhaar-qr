@@ -101,14 +101,21 @@ export function parseLegacyXmlAadhaar(rawText: string): ParsedAadhaar | null {
  */
 export function parseAadhaarQr(data: Uint8Array): ParsedAadhaar {
   const rawString = decodeText(data);
+  const trimmedString = rawString.trim();
+
   if (
+    trimmedString.startsWith("{") ||
+    trimmedString.startsWith("[") ||
+    trimmedString.includes('"hidn"') ||
+    trimmedString.includes('"hid"') ||
+    trimmedString.includes("health") ||
     rawString.includes("PrintLetterBarcodeData") ||
     rawString.includes("<?xml") ||
     rawString.includes("<PrintLetterBarcodeData") ||
     (rawString.includes("uid=") && rawString.includes("name="))
   ) {
     throw new InvalidAadhaarQrError(
-      "Payload is legacy XML Aadhaar QR code, not binary Secure QR",
+      "Invalid QR Code: Scanned QR code is not a valid UIDAI Aadhaar QR code.",
     );
   }
 
@@ -140,8 +147,10 @@ export function parseAadhaarQr(data: Uint8Array): ParsedAadhaar {
     segments.push(textBytes.subarray(segmentStart));
   }
 
-  if (segments.length === 0) {
-    throw new InvalidAadhaarQrError("Empty Aadhaar QR payload text fields");
+  if (segments.length < 4) {
+    throw new InvalidAadhaarQrError(
+      "Invalid QR Code: Scanned QR code is not a valid UIDAI Aadhaar QR code.",
+    );
   }
 
   const firstField = decodeText(segments[0]).trim();
@@ -166,8 +175,14 @@ export function parseAadhaarQr(data: Uint8Array): ParsedAadhaar {
     return idx < segments.length ? decodeText(segments[idx]) : "";
   };
 
-  const referenceId = getField(offset + 1);
-  const name = getField(offset + 2);
+  const referenceId = getField(offset + 1).trim();
+  const name = getField(offset + 2).trim();
+
+  if (!name && !referenceId) {
+    throw new InvalidAadhaarQrError(
+      "Invalid QR Code: Scanned QR code is not a valid UIDAI Aadhaar QR code.",
+    );
+  }
   const dob = getField(offset + 3);
   const gender = getField(offset + 4);
   const careOf = getField(offset + 5);

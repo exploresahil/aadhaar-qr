@@ -71,8 +71,25 @@ export async function processDecodedQrResult(
   rawText: string,
   rawBytes?: Uint8Array,
 ): Promise<ScanResult> {
-  let payloadBytes = rawBytes;
   const cleanText = rawText.replace(/\s+/g, "").trim();
+
+  if (
+    cleanText.startsWith("{") ||
+    cleanText.startsWith("[") ||
+    cleanText.includes('"hidn"') ||
+    cleanText.includes('"hid"') ||
+    cleanText.includes("health") ||
+    cleanText.startsWith("http://") ||
+    cleanText.startsWith("https://") ||
+    cleanText.startsWith("upi://") ||
+    cleanText.startsWith("BEGIN:VCARD")
+  ) {
+    throw new InvalidAadhaarQrError(
+      "Invalid QR Code: Scanned QR code is not a valid UIDAI Aadhaar QR code.",
+    );
+  }
+
+  let payloadBytes = rawBytes;
 
   if (/^\d{50,}$/.test(cleanText)) {
     payloadBytes = bigIntStringToBytes(cleanText);
@@ -84,15 +101,23 @@ export async function processDecodedQrResult(
 
   try {
     const parsed = parseAadhaarQr(decompressed);
+    if (!parsed.name && !parsed.referenceId) {
+      throw new InvalidAadhaarQrError(
+        "Invalid QR Code: Scanned QR code is not a valid UIDAI Aadhaar QR code.",
+      );
+    }
     return {
       rawText,
       bytes: decompressed,
       parsed,
     };
-  } catch {
+  } catch (err) {
+    if (err instanceof InvalidAadhaarQrError && !rawText.includes("PrintLetterBarcodeData") && !rawText.includes("uid=")) {
+      throw err;
+    }
     // Try parsing as legacy unverified XML Aadhaar QR code
     const legacyParsed = parseLegacyXmlAadhaar(rawText);
-    if (legacyParsed) {
+    if (legacyParsed && (legacyParsed.name || legacyParsed.referenceId)) {
       return {
         rawText,
         bytes: payloadBytes,
