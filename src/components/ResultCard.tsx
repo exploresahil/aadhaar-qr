@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ParsedAadhaar } from "@/lib/aadhaar/parser";
 import { decodeJp2kToDataUrl } from "@/utils/jp2k.util";
 import styles from "./resultCard.module.scss";
@@ -62,12 +62,69 @@ export default function ResultCard({
   const [copiedText, setCopiedText] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
 
-  // Masked Aadhaar number format (First 4 digits of referenceId = last 4 digits of Aadhaar number: XXXX-XXXX-1234)
+  // Compute SHA-256 hash of signatureHex (or rawText if no signature)
+  const signatureHash = useMemo(() => {
+    const source = data.signatureHex || rawText || "";
+    if (!source) return "—";
+    // Fast synchronous hash calculation simulation for display / instant clipboard copy
+    let hash = 0;
+    for (let i = 0; i < source.length; i++) {
+      hash = (hash << 5) - hash + source.charCodeAt(i);
+      hash |= 0;
+    }
+    return hash;
+  }, [data.signatureHex, rawText]);
+
+  const [asyncSigHash, setAsyncSigHash] = useState<string>("Calculating...");
+
+  useEffect(() => {
+    let isMounted = true;
+    async function computeSha256() {
+      const source = data.signatureHex || rawText || "";
+      if (!source) {
+        if (isMounted) setAsyncSigHash("N/A");
+        return;
+      }
+      try {
+        const encoder = new TextEncoder();
+        const hashBuffer = await crypto.subtle.digest(
+          "SHA-256",
+          encoder.encode(source),
+        );
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        const hex = hashArray
+          .map((b) => b.toString(16).padStart(2, "0"))
+          .join("");
+        if (isMounted) setAsyncSigHash(hex);
+      } catch {
+        if (isMounted) setAsyncSigHash("N/A");
+      }
+    }
+    computeSha256();
+    return () => {
+      isMounted = false;
+    };
+  }, [data.signatureHex, rawText]);
+
+  const isXmlFormat = useMemo(() => {
+    return data.version?.toLowerCase().includes("xml") ?? false;
+  }, [data.version]);
+
+  // Masked Aadhaar number format:
+  // - Legacy XML QR: referenceId is 12-digit UID (e.g. 611172431644) -> last 4 digits are at the end (1644)
+  // - V2/V3/V5 Secure QR: first 4 digits of referenceId are the last 4 digits of Aadhaar number
   const maskedAadhaar = useMemo(() => {
     const ref = data.referenceId ? data.referenceId.trim() : "";
-    const last4 = ref ? ref.slice(0, 4) : "XXXX";
+    if (!ref || ref === "UNVERIFIED") return "XXXX-XXXX-XXXX";
+
+    if (isXmlFormat || /^\d{12}$/.test(ref)) {
+      const last4 = ref.slice(-4);
+      return `XXXX-XXXX-${last4}`;
+    }
+
+    const last4 = ref.slice(0, 4);
     return `XXXX-XXXX-${last4}`;
-  }, [data.referenceId]);
+  }, [data.referenceId, isXmlFormat]);
 
   // Calculated Age numeric string
   const ageDisplay = useMemo(() => {
@@ -159,6 +216,7 @@ export default function ResultCard({
         hashMobile: data.hashMobile,
         hashEmail: data.hashEmail,
         signature: data.signatureHex,
+        signatureHash: asyncSigHash,
       };
       await navigator.clipboard.writeText(
         JSON.stringify(serializableData, null, 2),
@@ -196,6 +254,7 @@ export default function ResultCard({
         `Address: ${fullAddress || "N/A"}`,
         `Verification: ${data.isVerified !== false ? "Verified Secure QR" : "Unverified QR"}`,
         `Digital Signature: ${data.signatureHex || "N/A"}`,
+        `Signature Hash (SHA-256): ${asyncSigHash}`,
         `Scanned At: ${scanTimestampIst}`,
       ].join("\n");
 
@@ -246,6 +305,7 @@ export default function ResultCard({
           >
             {copiedJson ? "✓ Copied JSON" : "📋 Copy JSON"}
           </button>
+
           <button
             type="button"
             className={styles.copyBtn}
@@ -262,7 +322,7 @@ export default function ResultCard({
           </button>
           {onReset && (
             <button type="button" className={styles.resetBtn} onClick={onReset}>
-              Scan Another
+              🔄 Scan Another
             </button>
           )}
         </div>
@@ -293,51 +353,190 @@ export default function ResultCard({
           </div>
 
           <div className={styles.infoRow}>
-            <span className={styles.label}>Reference ID</span>
+            <span className={styles.label}>
+              {isXmlFormat ? "Aadhaar Number (12-Digit UID)" : "Reference ID"}
+              <small
+                style={{
+                  display: "block",
+                  fontSize: "0.725rem",
+                  color: "#16a34a",
+                  fontWeight: 500,
+                  marginTop: "2px",
+                }}
+              >
+                {isXmlFormat
+                  ? "✓ Direct 12-Digit Aadhaar UID from XML Payload"
+                  : "✓ Direct from QR Payload"}
+              </small>
+            </span>
             <code className={styles.hashCode}>{data.referenceId || "—"}</code>
           </div>
 
           <div className={styles.infoRow}>
-            <span className={styles.label}>Masked Aadhaar Number</span>
+            <span className={styles.label}>
+              Masked Aadhaar Number
+              <small
+                style={{
+                  display: "block",
+                  fontSize: "0.725rem",
+                  color: "#6e6e73",
+                  fontWeight: 400,
+                  marginTop: "2px",
+                }}
+              >
+                {isXmlFormat
+                  ? "Calculated client-side from 12-digit UID"
+                  : "Calculated client-side from Reference ID"}
+              </small>
+            </span>
             <span className={styles.valueHighlight}>{maskedAadhaar}</span>
           </div>
 
           {data.mobile && (
             <div className={styles.infoRow}>
-              <span className={styles.label}>Mobile Number</span>
+              <span className={styles.label}>
+                Mobile Number
+                <small
+                  style={{
+                    display: "block",
+                    fontSize: "0.725rem",
+                    color: "#16a34a",
+                    fontWeight: 500,
+                    marginTop: "2px",
+                  }}
+                >
+                  ✓ Direct from QR Payload
+                </small>
+              </span>
               <span className={styles.valueHighlight}>{data.mobile}</span>
             </div>
           )}
 
           <div className={styles.infoRow}>
-            <span className={styles.label}>Date of Birth</span>
+            <span className={styles.label}>
+              Date of Birth
+              <small
+                style={{
+                  display: "block",
+                  fontSize: "0.725rem",
+                  color: "#16a34a",
+                  fontWeight: 500,
+                  marginTop: "2px",
+                }}
+              >
+                ✓ Direct from QR Payload
+              </small>
+            </span>
             <span className={styles.value}>{data.dob || "—"}</span>
           </div>
 
           <div className={styles.infoRow}>
-            <span className={styles.label}>Age</span>
+            <span className={styles.label}>
+              Age
+              <small
+                style={{
+                  display: "block",
+                  fontSize: "0.725rem",
+                  color: "#6e6e73",
+                  fontWeight: 400,
+                  marginTop: "2px",
+                }}
+              >
+                Calculated client-side from DOB
+              </small>
+            </span>
             <span className={styles.valueHighlight}>{ageDisplay || "—"}</span>
           </div>
 
           <div className={styles.infoRow}>
-            <span className={styles.label}>Gender</span>
+            <span className={styles.label}>
+              Gender
+              <small
+                style={{
+                  display: "block",
+                  fontSize: "0.725rem",
+                  color: "#16a34a",
+                  fontWeight: 500,
+                  marginTop: "2px",
+                }}
+              >
+                ✓ Direct from QR Payload
+              </small>
+            </span>
             <span className={styles.value}>{genderDisplay}</span>
           </div>
 
           <div className={styles.infoRow}>
-            <span className={styles.label}>PIN Code</span>
+            <span className={styles.label}>
+              PIN Code
+              <small
+                style={{
+                  display: "block",
+                  fontSize: "0.725rem",
+                  color: "#16a34a",
+                  fontWeight: 500,
+                  marginTop: "2px",
+                }}
+              >
+                ✓ Direct from QR Payload
+              </small>
+            </span>
             <span className={styles.valueHighlight}>{data.pincode || "—"}</span>
           </div>
 
           <div className={styles.infoRow}>
-            <span className={styles.label}>Full Address</span>
+            <span className={styles.label}>
+              Full Address
+              <small
+                style={{
+                  display: "block",
+                  fontSize: "0.725rem",
+                  color: "#16a34a",
+                  fontWeight: 500,
+                  marginTop: "2px",
+                }}
+              >
+                ✓ Direct from QR Payload
+              </small>
+            </span>
             <span className={styles.value}>{fullAddress || "—"}</span>
+          </div>
+
+          <div className={styles.infoRow}>
+            <span className={styles.label}>
+              Signature Hash (Client-Side SHA-256)
+              <small
+                style={{
+                  display: "block",
+                  fontSize: "0.725rem",
+                  color: "#6e6e73",
+                  fontWeight: 400,
+                  marginTop: "2px",
+                }}
+              >
+                {data.signatureHex
+                  ? "Calculated client-side from UIDAI 256-byte RSA signature for indexing"
+                  : "Calculated client-side from raw XML payload text"}
+              </small>
+            </span>
+            <code className={styles.hashCode}>{asyncSigHash}</code>
           </div>
 
           {data.signatureHex && (
             <div className={styles.infoRow}>
               <span className={styles.label}>
                 UIDAI Digital Signature (256 Bytes)
+                <small
+                  style={{
+                    display: "block",
+                    fontSize: "0.725rem",
+                    color: "#16a34a",
+                    fontWeight: 500,
+                    marginTop: "2px",
+                  }}
+                >
+                  ✓ Direct 256-Byte RSA Signature from QR Payload
+                </small>
               </span>
               <code className={styles.hashCode}>{data.signatureHex}</code>
             </div>
@@ -345,14 +544,40 @@ export default function ResultCard({
 
           {data.hashMobile && (
             <div className={styles.infoRow}>
-              <span className={styles.label}>Mobile Hash (SHA-256)</span>
+              <span className={styles.label}>
+                Mobile Hash (SHA-256)
+                <small
+                  style={{
+                    display: "block",
+                    fontSize: "0.725rem",
+                    color: "#16a34a",
+                    fontWeight: 500,
+                    marginTop: "2px",
+                  }}
+                >
+                  ✓ Direct 32-Byte Hash from QR Payload
+                </small>
+              </span>
               <code className={styles.hashCode}>{data.hashMobile}</code>
             </div>
           )}
 
           {data.hashEmail && (
             <div className={styles.infoRow}>
-              <span className={styles.label}>Email Hash (SHA-256)</span>
+              <span className={styles.label}>
+                Email Hash (SHA-256)
+                <small
+                  style={{
+                    display: "block",
+                    fontSize: "0.725rem",
+                    color: "#16a34a",
+                    fontWeight: 500,
+                    marginTop: "2px",
+                  }}
+                >
+                  ✓ Direct 32-Byte Hash from QR Payload
+                </small>
+              </span>
               <code className={styles.hashCode}>{data.hashEmail}</code>
             </div>
           )}
@@ -541,6 +766,25 @@ export default function ResultCard({
                     </td>
                     <td>photo</td>
                     <td>{data.photo?.length || 0} bytes binary stream</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <code>Signature Hash</code>
+                    </td>
+                    <td>signatureHash</td>
+                    <td>
+                      <code>{asyncSigHash}</code>
+                      <small
+                        style={{
+                          display: "block",
+                          color: "#6e6e73",
+                          marginTop: "2px",
+                        }}
+                      >
+                        (Computed client-side via SHA-256 for DB indexing; not
+                        embedded directly in QR payload)
+                      </small>
+                    </td>
                   </tr>
                   {data.signatureHex && (
                     <tr>

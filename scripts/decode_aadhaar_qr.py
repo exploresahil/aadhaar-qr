@@ -135,6 +135,48 @@ def decode_qr_image(image_path):
     clean_str = raw_text.replace(" ", "").strip()
     is_bigint = clean_str.isdigit()
 
+    import re
+    if "PrintLetterBarcodeData" in raw_text or "uid=" in raw_text or "<?xml" in raw_text:
+        def get_attr(attr):
+            m = re.search(r'' + attr + r'=(?:"|\')([^"\']*)(?:"|\')', raw_text, re.IGNORECASE)
+            return m.group(1).strip() if m else ""
+
+        parsed = {
+            "version": "XML (Legacy)",
+            "bitIndicator": 0,
+            "referenceId": get_attr("uid"),
+            "name": get_attr("name"),
+            "dob": get_attr("dob") or get_attr("yob"),
+            "gender": get_attr("gender"),
+            "careOf": get_attr("co") or get_attr("gname"),
+            "district": get_attr("dist"),
+            "landmark": get_attr("lm"),
+            "house": get_attr("house"),
+            "location": get_attr("loc"),
+            "pincode": get_attr("pc") or get_attr("pincode"),
+            "postOffice": get_attr("po"),
+            "state": get_attr("state"),
+            "street": get_attr("street"),
+            "subDistrict": get_attr("subdist"),
+            "vtc": get_attr("vtc"),
+            "mobile": None,
+            "isVerified": False
+        }
+        return {
+            "success": True,
+            "version": "XML (Legacy)",
+            "raw_text": raw_text,
+            "raw_len": len(raw_text),
+            "compressed_len": len(raw_text),
+            "decompressed_len": len(raw_text),
+            "fields": [raw_text],
+            "parsed": parsed,
+            "signatureHex": "", # XML QR code has NO RSA digital signature
+            "photoLen": 0,
+            "photoBase64": "",
+            "isVerified": False
+        }
+
     if is_bigint:
         big_num = int(clean_str)
         hex_str = hex(big_num)[2:]

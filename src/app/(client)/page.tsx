@@ -2,13 +2,19 @@
 
 import Header from "@/components/Header";
 import Scanner from "@/components/Scanner";
+import type { ScanResult } from "@/utils/qrScanner.util";
+import { useState } from "react";
 import styles from "./page.module.scss";
 
 export default function Home() {
+  const [activeScanResult, setActiveScanResult] = useState<ScanResult | null>(
+    null,
+  );
+
   return (
     <div className={styles.container}>
       <div className={styles.glassOrb} />
-      <Header />
+      <Header activeResult={activeScanResult} />
 
       {/* Hero Section */}
       <section className={styles.hero}>
@@ -25,7 +31,7 @@ export default function Home() {
 
       {/* Scanner Section */}
       <section id="scanner" className={styles.scannerSection}>
-        <Scanner />
+        <Scanner onScanSuccess={(res) => setActiveScanResult(res)} />
       </section>
 
       {/* Technical Spec Section */}

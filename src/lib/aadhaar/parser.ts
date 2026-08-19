@@ -79,7 +79,7 @@ export function parseLegacyXmlAadhaar(rawText: string): ParsedAadhaar | null {
     name: name || "Unknown Resident",
     dob: getAttr("dob") || getAttr("yob") || "—",
     gender: getAttr("gender") || "—",
-    careOf: getAttr("co") || "—",
+    careOf: getAttr("co") || getAttr("gname") || "—",
     district: getAttr("dist") || "—",
     landmark: getAttr("lm") || "—",
     house: getAttr("house") || "—",
@@ -100,6 +100,18 @@ export function parseLegacyXmlAadhaar(rawText: string): ParsedAadhaar | null {
  * Parses binary V2/V3/V5 UIDAI Secure Aadhaar QR code
  */
 export function parseAadhaarQr(data: Uint8Array): ParsedAadhaar {
+  const rawString = decodeText(data);
+  if (
+    rawString.includes("PrintLetterBarcodeData") ||
+    rawString.includes("<?xml") ||
+    rawString.includes("<PrintLetterBarcodeData") ||
+    (rawString.includes("uid=") && rawString.includes("name="))
+  ) {
+    throw new InvalidAadhaarQrError(
+      "Payload is legacy XML Aadhaar QR code, not binary Secure QR",
+    );
+  }
+
   // 1. Find JPEG 2000 SOC marker (0xFF 0x4F) to locate photo start and separate text header
   let socIndex = -1;
   for (let i = 0; i < data.length - 1; i++) {

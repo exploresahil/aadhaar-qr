@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import { processDecodedQrResult } from "@/utils/qrScanner.util";
+import { processDecodedQrResult } from "@/lib/aadhaar/decoder";
 import { NextResponse } from "next/server";
 import sharp from "sharp";
 import { readBarcodes } from "zxing-wasm/reader";

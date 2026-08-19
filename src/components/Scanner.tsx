@@ -12,7 +12,7 @@ import ResultCard from "./ResultCard";
 import styles from "./scanner.module.scss";
 
 interface ScannerProps {
-  readonly onScanSuccess?: (result: ScanResult) => void;
+  readonly onScanSuccess?: (result: ScanResult | null) => void;
 }
 
 const STORAGE_KEY_DEVICE_ID = "aadhaar_qr_preferred_device_id";
@@ -324,6 +324,22 @@ function PythonTab({
             Uses server-side Python OpenCV multi-pass grid engine to detect and
             decode challenging Aadhaar QRs
           </p>
+          <div
+            style={{
+              marginTop: "0.85rem",
+              padding: "0.5rem 0.75rem",
+              background: "rgba(0, 0, 0, 0.04)",
+              borderRadius: "8px",
+              fontSize: "0.75rem",
+              color: "#525252",
+              lineHeight: "1.35",
+            }}
+          >
+            <strong>💡 Architecture Note:</strong> Executed natively via Python
+            3 + OpenCV in local dev mode (<code>npm run dev</code>). On Vercel
+            free-tier serverless deployments, automatically falls back to
+            WebAssembly serverless engine.
+          </div>
         </div>
         <input
           id="python-qr-file-input"
@@ -497,10 +513,14 @@ export default function Scanner({ onScanSuccess }: ScannerProps) {
   }, []);
 
   // Synchronize resultRef with state
-  const updateResult = useCallback((res: ScanResult | null) => {
-    resultRef.current = res;
-    setResult(res);
-  }, []);
+  const updateResult = useCallback(
+    (res: ScanResult | null) => {
+      resultRef.current = res;
+      setResult(res);
+      onScanSuccess?.(res);
+    },
+    [onScanSuccess],
+  );
 
   // Enumerate cameras & smart select main wide lens or saved preferred lens
   const enumerateCameras = useCallback(async () => {

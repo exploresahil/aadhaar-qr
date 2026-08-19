@@ -128,16 +128,24 @@
 }
 
 .copyBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
   font-family: var(--font-geist-sans, sans-serif);
   background: #f5f5f7;
   color: #171717;
   font-size: 0.85rem;
   font-weight: 500;
-  padding: 0.65rem 1.25rem;
+  line-height: 1.2;
+  padding: 0.6rem 1.25rem;
+  height: 38px;
   border-radius: 999px;
   border: 1px solid rgba(23, 23, 23, 0.12);
+  box-sizing: border-box;
   cursor: pointer;
   transition: all 0.2s ease;
+  white-space: nowrap;
 
   &:hover {
     background: #e5e5ea;
@@ -146,20 +154,29 @@
 }
 
 .resetBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
   font-family: var(--font-geist-sans, sans-serif);
   background: #171717;
   color: #ffffff;
   font-size: 0.85rem;
   font-weight: 500;
-  padding: 0.65rem 1.25rem;
+  line-height: 1.2;
+  padding: 0.6rem 1.25rem;
+  height: 38px;
   border-radius: 999px;
   border: 1px solid #171717;
+  box-sizing: border-box;
   cursor: pointer;
   transition: all 0.2s ease;
+  white-space: nowrap;
 
   &:hover {
     background: #b91c1c;
     border-color: #b91c1c;
+    transform: translateY(-1px);
   }
 }
 
