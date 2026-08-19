@@ -14,7 +14,7 @@ export default function Home() {
   return (
     <div className={styles.container}>
       <div className={styles.glassOrb} />
-      <Header activeResult={activeScanResult} />
+      <Header />
 
       {/* Hero Section */}
       <section className={styles.hero}>
